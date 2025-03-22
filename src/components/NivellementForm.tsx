@@ -4,7 +4,6 @@ import { Nivellement, NivellementPunkt } from '../models/types';
 import { evaluateNivellement, updateNivellementPunkte } from '../utils/calculations';
 import { saveNivellement } from '../utils/storage';
 import NivellementTable from './NivellementTable';
-import NivellementAuswertungView from './NivellementAuswertungView';
 
 interface NivellementFormProps {
   initialNivellement?: Nivellement;

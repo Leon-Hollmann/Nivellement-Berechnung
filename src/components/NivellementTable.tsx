@@ -282,17 +282,6 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     }
   };
 
-  // Bestimmt die nächste Punktnummer basierend auf der aktuellen
-  const getNextPunktNr = (currentPunktNr: string) => {
-    if (currentPunktNr.startsWith('W')) {
-      return 'M';
-    } else if (currentPunktNr.startsWith('M')) {
-      return 'W';
-    } else {
-      return 'W';
-    }
-  };
-
   // Verarbeitungsfunktion für das Ende eines Drag-Vorgangs
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -596,11 +585,6 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
 
   // State für Fehlerverteilung
   const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<number, number>>(propKorrekturen || {});
-
-  // Berechne die Anzahl der Wechselpunkte (für die Fehlerverteilung)
-  const countWechselPunkte = (): number => {
-    return punkte.filter(p => p.punktNr.startsWith('W')).length;
-  };
 
   // Füge Korrektur zu einem einzelnen Wechselpunkt hinzu
   const addPunktKorrektur = (index: number, positiv: boolean) => {
