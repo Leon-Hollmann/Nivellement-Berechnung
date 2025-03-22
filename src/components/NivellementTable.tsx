@@ -440,52 +440,6 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     return Math.abs(calculateSummeDeltaH() - calculateDeltaHSoll()) < 0.001;
   };
 
-  const probeMittelblicke = (): boolean => {
-    // Suche nach M-Punkten, die von W-Punkten umgeben sind
-    for (let i = 0; i < punkte.length; i++) {
-      const punkt = punkte[i];
-      // Überspringe MB-Startpunkt und alle Punkte, die nicht mit M beginnen
-      if (i === 0 || !punkt.punktNr.startsWith('M')) continue;
-      
-      // Finde den nächsten W-Punkt nach diesem M-Punkt
-      let nextWIndex = -1;
-      for (let j = i + 1; j < punkte.length; j++) {
-        if (punkte[j].punktNr.startsWith('W') || punkte[j].punktNr.startsWith('MB')) {
-          nextWIndex = j;
-          break;
-        }
-      }
-      
-      if (nextWIndex > -1) {
-        // Prüfe, ob die Höhe des W-Punkts durch direkte Berechnung vom M-Punkt erreichbar ist
-        const mPunkt = punkt;
-        const wPunkt = punkte[nextWIndex];
-        
-        // Verwende die korrigierten Höhen aus displayPunkte
-        const mDisplayPunkt = displayPunkte[i];
-        const wDisplayPunkt = displayPunkte[nextWIndex];
-        
-        if (mPunkt.mittelblick !== null && wPunkt.vorblick !== null && 
-            mDisplayPunkt.absoluteHoehe !== null && wDisplayPunkt.absoluteHoehe !== null) {
-          
-          // Berechne den Höhenunterschied direkt: m - v
-          const direkterHöhenunterschied = mPunkt.mittelblick - wPunkt.vorblick;
-          
-          // Berechne die erwartete absolute Höhe des W-Punkts
-          const erwarteteHöhe = mDisplayPunkt.absoluteHoehe + direkterHöhenunterschied;
-          
-          // Prüfe, ob die erwartete Höhe mit der tatsächlichen Höhe übereinstimmt
-          const höhenDifferenz = Math.abs(erwarteteHöhe - wDisplayPunkt.absoluteHoehe);
-          if (höhenDifferenz > 0.001) { // Toleranz von 1mm
-            return false;
-          }
-        }
-      }
-    }
-    
-    return true;
-  };
-
   // Neue Funktion, um alle Mittelblick-Proben auszuführen und Details zurückzugeben
   const getMittelblickProben = () => {
     const proben: {
@@ -639,6 +593,15 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
         bemerkung: '',
         korrektur: null
       });
+      
+      // Setze den Fokus auf das passende Eingabefeld basierend auf dem Punkttyp
+      setTimeout(() => {
+        if (currentPunktTyp === 'W' && rueckblickRef.current) {
+          rueckblickRef.current.focus();
+        } else if (currentPunktTyp === 'M' && mittelblickRef.current) {
+          mittelblickRef.current.focus();
+        }
+      }, 10);
     }
   };
 
@@ -1006,7 +969,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             .nivellement-table table col.col-rueckblick { width: 120px; }
             .nivellement-table table col.col-mittelblick { width: 120px; }
             .nivellement-table table col.col-vorblick { width: 120px; }
-            .nivellement-table table col.col-delta-h { width: 85px; }
+            .nivellement-table table col.col-delta-h { width: 105px; }
             .nivellement-table table col.col-abs-hoehe { width: 120px; }
             .nivellement-table table col.col-bemerkung { width: 160px; }
             .nivellement-table table col.col-aktionen { width: 90px; }
@@ -1556,65 +1519,81 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
       {/* Füge Auswertungszusammenfassung direkt unter Tabelle hinzu */}
       {punkte.length > 0 && (
         <div className="table-summary">
-          <table className="summary-table">
+          <table className="summary-table" style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
-              <col className="col-handle" />
-              <col className="col-punkt-nr" />
-              <col className="col-rueckblick" />
-              <col className="col-mittelblick" />
-              <col className="col-vorblick" />
-              <col className="col-delta-h" />
-              <col className="col-abs-hoehe" />
-              <col className="col-bemerkung" />
-              <col className="col-aktionen" />
+              <col className="col-handle" style={{ width: '40px' }} />
+              <col className="col-punkt-nr" style={{ width: '110px' }} />
+              <col className="col-rueckblick" style={{ width: '120px' }} />
+              <col className="col-mittelblick" style={{ width: '120px' }} />
+              <col className="col-vorblick" style={{ width: '120px' }} />
+              <col className="col-delta-h" style={{ width: '105px' }} />
+              <col className="col-abs-hoehe" style={{ width: '120px' }} />
+              <col className="col-bemerkung" style={{ width: '160px' }} />
+              <col className="col-aktionen" style={{ width: '90px' }} />
             </colgroup>
             <tbody>
               <tr className="summary-row">
-                <td colSpan={2} className="summary-label">Summe:</td>
-                <td className="summary-value">
+                <td></td>
+                <td></td>
+                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   Σr = {calculateSummeRueckblick().toFixed(3)}
                 </td>
                 <td></td>
-                <td className="summary-value">
+                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   Σv = {calculateSummeVorblick().toFixed(3)}
                 </td>
-                <td className="summary-value">
+                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                   ΣΔh = {calculateSummeDeltaH().toFixed(3)}
                 </td>
-                <td colSpan={3}></td>
+                <td></td>
+                <td></td>
+                <td></td>
               </tr>
             </tbody>
           </table>
           
           {/* Kurze Zusammenfassung der wichtigsten Auswertungsinformationen */}
-          <div className="auswertung-summary">
-            <div className="auswertung-summary-item">
-              <span>Δh<sub>ist</sub> = Σr - Σv: </span>
-              <span>{calculateDeltaHIst().toFixed(3)} m</span>
+          <div className="auswertung-summary" style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            flexWrap: 'wrap',
+            marginTop: '15px'
+          }}>
+            <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
+              <div className="auswertung-summary-item">
+                <span>Δh<sub>ist</sub> = Σr - Σv = </span>
+                <span>{calculateDeltaHIst().toFixed(3)} m</span>
+              </div>
+              <div className="auswertung-summary-item">
+                <span>Δh<sub>soll</sub> = h<sub>Ende</sub> - h<sub>Start</sub> = </span>
+                <span>{calculateDeltaHSoll().toFixed(3)} m</span>
+              </div>
             </div>
-            <div className="auswertung-summary-item">
-              <span>Δh<sub>soll</sub> = h<sub>Ende</sub> - h<sub>Start</sub>: </span>
-              <span>{calculateDeltaHSoll().toFixed(3)} m</span>
+            
+            <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
+              <div className="auswertung-summary-item">
+                <span>Fehler v = Δh<sub>soll</sub> - Δh<sub>ist</sub> = </span>
+                <span>{calculateFehlerV().toFixed(3)} m</span>
+              </div>
+              <div className="auswertung-summary-item">
+                <span>Zulässiger Fehler <br /> v<sub>zul</sub> = 15mm · √L = </span>
+                <span>{calculateZulaessigerFehler().toFixed(3)} m</span>
+              </div>
+              <div className={`auswertung-summary-item ${isFehlerZulaessig() ? 'success' : 'error'}`}>
+                <span>Fehler zulässig: |v| ≤ v<sub>zul</sub></span>
+                <span>{isFehlerZulaessig() ? 'Ja ✓' : 'Nein ✗'}</span>
+              </div>
             </div>
-            <div className="auswertung-summary-item">
-              <span>Fehler v = Δh<sub>soll</sub> - Δh<sub>ist</sub>: </span>
-              <span>{calculateFehlerV().toFixed(3)} m</span>
-            </div>
-            <div className="auswertung-summary-item">
-              <span>Zulässiger Fehler v<sub>zul</sub> = 15mm · √L: </span>
-              <span>{calculateZulaessigerFehler().toFixed(3)} m</span>
-            </div>
-            <div className={`auswertung-summary-item ${isFehlerZulaessig() ? 'success' : 'error'}`}>
-              <span>Fehler zulässig: |v| ≤ v<sub>zul</sub></span>
-              <span>{isFehlerZulaessig() ? 'Ja ✓' : 'Nein ✗'}</span>
-            </div>
-            <div className={`auswertung-summary-item ${isSummeDeltaHKorrekt() ? 'success' : 'error'}`}>
-              <span>Summe Δh = Δh<sub>soll</sub>: </span>
-              <span>{isSummeDeltaHKorrekt() ? 'Ja ✓' : 'Nein ✗'}</span>
-            </div>
-            <div className={`auswertung-summary-item ${probeMittelblicke() ? 'success' : 'error'}`}>
-              <span>Mittelblick-Probe: h<sub>W</sub> = h<sub>M</sub> + (m - v)</span>
-              <span>{probeMittelblicke() ? 'Korrekt ✓' : 'Fehler ✗'}</span>
+            
+            <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
+              <div className={`auswertung-summary-item ${isSummeDeltaHKorrekt() ? 'success' : 'error'}`}>
+                <span>Summe Δh = Δh<sub>soll</sub>: </span>
+                <span>{isSummeDeltaHKorrekt() ? 'Ja ✓' : 'Nein ✗'}</span>
+              </div>
+              <div className={`auswertung-summary-item ${Math.abs(calculateFehlerV() * 1000 - calculateGesamtKorrektur()) < 0.5 ? 'success' : 'error'}`}>
+                <span>Alle Fehler verteilt: </span>
+                <span>{Math.abs(calculateFehlerV() * 1000 - calculateGesamtKorrektur()) < 0.5 ? 'Ja ✓' : 'Nein ✗'}</span>
+              </div>
             </div>
           </div>
           
