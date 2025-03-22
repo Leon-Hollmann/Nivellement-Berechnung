@@ -15,6 +15,7 @@ import {
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { calculateDeltaH, calculateAbsoluteHoehe } from '../utils/calculations';
 
 // Drag-Handle-Komponente
 const DragHandle = () => (
@@ -82,6 +83,41 @@ interface NivellementTableProps {
   streckeLaenge?: number;
   onStreckeLaengeChange?: (streckeLaenge: number) => void;
 }
+
+// Hilfsfunktion zum Anzuwenden von Korrekturen auf deltaH
+const applyKorrekturenToDeltaH = (
+  punkte: NivellementPunkt[], 
+  korrekturen: Record<number, number>
+): NivellementPunkt[] => {
+  if (Object.keys(korrekturen).length === 0) return punkte;
+  
+  const updatedPunkte = [...punkte];
+  
+  // Berechne deltaH für alle Punkte mit Korrekturen
+  for (let i = 1; i < updatedPunkte.length; i++) {
+    const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
+    updatedPunkte[i] = {
+      ...updatedPunkte[i],
+      deltaH
+    };
+    
+    // Aktualisiere auch die absolute Höhe
+    if (i > 0 && deltaH !== null) {
+      const prevPunkt = updatedPunkte[i - 1];
+      if (prevPunkt.absoluteHoehe !== null) {
+        const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, deltaH);
+        if (i < updatedPunkte.length - 1) { // Nicht für den letzten Punkt
+          updatedPunkte[i] = {
+            ...updatedPunkte[i],
+            absoluteHoehe
+          };
+        }
+      }
+    }
+  }
+  
+  return updatedPunkte;
+};
 
 const NivellementTable: React.FC<NivellementTableProps> = ({ 
   punkte, 
@@ -301,7 +337,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   };
 
   const calculateSummeDeltaH = (): number => {
-    return punkte.reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
+    // Hier verwenden wir displayPunkte, um die Korrekturen zu berücksichtigen
+    return displayPunkte.reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
   };
 
   const calculateDeltaHIst = (): number => {
@@ -517,6 +554,46 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     
     onChange(updatedPunkte);
   };
+
+  // State für Fehlerverteilung
+  const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<number, number>>({});
+
+  // Berechne die Anzahl der Wechselpunkte (für die Fehlerverteilung)
+  const countWechselPunkte = (): number => {
+    return punkte.filter(p => p.punktNr.startsWith('W')).length;
+  };
+
+  // Füge Korrektur zu einem einzelnen Wechselpunkt hinzu
+  const addPunktKorrektur = (index: number, positiv: boolean) => {
+    // Standardwert für Korrektur in mm (1 mm statt 0.1 mm)
+    const korrekturWert = positiv ? 1 : -1;
+    
+    setFehlerKorrekturen(prev => ({
+      ...prev,
+      [index]: (prev[index] || 0) + korrekturWert
+    }));
+  };
+
+  // Zurücksetzen der Korrekturen
+  const resetKorrekturen = () => {
+    setFehlerKorrekturen({});
+  };
+
+  // Berechne die Summe aller aktuellen Korrekturen in mm
+  const calculateGesamtKorrektur = (): number => {
+    if (Object.keys(fehlerKorrekturen).length === 0) return 0;
+    
+    return Object.values(fehlerKorrekturen).reduce((sum, korrektur) => sum + korrektur, 0);
+  };
+
+  // Anzeige-Punkte mit angewendeten Korrekturen für deltaH
+  const [displayPunkte, setDisplayPunkte] = useState<NivellementPunkt[]>(punkte);
+  
+  // Aktualisiere displayPunkte, wenn sich punkte oder fehlerKorrekturen ändern
+  useEffect(() => {
+    const updatedDisplayPunkte = applyKorrekturenToDeltaH(punkte, fehlerKorrekturen);
+    setDisplayPunkte(updatedDisplayPunkte);
+  }, [punkte, fehlerKorrekturen]);
 
   return (
     <>
@@ -737,11 +814,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             
             .nivellement-table table col.col-handle { width: 40px; }
             .nivellement-table table col.col-punkt-nr { width: 110px; }
-            .nivellement-table table col.col-rueckblick { width: 110px; }
-            .nivellement-table table col.col-mittelblick { width: 110px; }
-            .nivellement-table table col.col-vorblick { width: 110px; }
-            .nivellement-table table col.col-delta-h { width: 80px; }
-            .nivellement-table table col.col-abs-hoehe { width: 110px; }
+            .nivellement-table table col.col-rueckblick { width: 120px; }
+            .nivellement-table table col.col-mittelblick { width: 120px; }
+            .nivellement-table table col.col-vorblick { width: 120px; }
+            .nivellement-table table col.col-delta-h { width: 85px; }
+            .nivellement-table table col.col-abs-hoehe { width: 120px; }
             .nivellement-table table col.col-bemerkung { width: 160px; }
             .nivellement-table table col.col-aktionen { width: 90px; }
             
@@ -753,6 +830,35 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               padding: 4px 6px;
               border: 1px solid #ccc;
               border-radius: 3px;
+            }
+            
+            /* Entferne Pfeile bei Zahlenfeldern */
+            .nivellement-table table input[type="number"] {
+              -moz-appearance: textfield;
+            }
+            
+            .nivellement-table table input[type="number"]::-webkit-outer-spin-button,
+            .nivellement-table table input[type="number"]::-webkit-inner-spin-button {
+              -webkit-appearance: none;
+              margin: 0;
+            }
+            
+            /* Verbessere die Darstellung für Zahleneingaben */
+            .nivellement-table table input[type="number"] {
+              text-overflow: ellipsis;
+              font-family: monospace;
+              font-size: 14px;
+              text-align: right;
+              letter-spacing: 0.5px;
+            }
+            
+            /* Verbessere die Darstellung von berechneten Zahlenwerten */
+            .nivellement-table td span:not(.korrektur-wert):not(.punkt-nummer) {
+              font-family: monospace;
+              font-size: 14px;
+              letter-spacing: 0.5px;
+              display: block;
+              text-align: right;
             }
             
             /* Punkt-Typ Flex-Container */
@@ -823,6 +929,155 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             .new-row select {
               max-width: 150px;
             }
+            
+            /* Styles für Fehlerkorrektur-Buttons */
+            .korrektur-container {
+              display: flex;
+              align-items: center;
+              margin-left: 8px;
+            }
+            
+            .korrektur-buttons {
+              display: flex;
+              flex-direction: column;
+              margin-left: 4px;
+            }
+            
+            .korrektur-button {
+              background-color: #f0f0f0;
+              border: 1px solid #ccc;
+              width: 20px;
+              height: 20px;
+              font-size: 14px;
+              line-height: 1;
+              padding: 0;
+              margin: 1px;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            
+            .korrektur-button:hover {
+              background-color: #e0e0e0;
+            }
+            
+            .korrektur-wert {
+              color: red;
+              font-size: 0.8em;
+              margin-left: 4px;
+              white-space: nowrap;
+            }
+            
+            /* Zusätzliche Styles für die Korrektur-Aktions-Buttons */
+            .korrektur-actions {
+              display: flex;
+              gap: 8px;
+              margin-top: 10px;
+            }
+            
+            .korrektur-apply-button, .korrektur-reset-button {
+              padding: 5px 10px;
+              border-radius: 4px;
+              cursor: pointer;
+            }
+            
+            .korrektur-apply-button {
+              background-color: #4caf50;
+              color: white;
+              border: none;
+            }
+            
+            .korrektur-reset-button {
+              background-color: #f44336;
+              color: white;
+              border: none;
+            }
+            
+            .fehlerverteilung-container {
+              border: 1px solid #ddd;
+              border-radius: 5px;
+              padding: 10px;
+              margin-top: 15px;
+              background-color: #f9f9f9;
+            }
+            
+            .fehlerverteilung-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            }
+            
+            .fehlerverteilung-header h4 {
+              margin: 0;
+            }
+            
+            .korrektur-status {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 15px;
+              margin-bottom: 10px;
+            }
+            
+            .korrektur-status-item {
+              display: flex;
+              align-items: center;
+            }
+            
+            .korrektur-status-label {
+              font-weight: bold;
+              margin-right: 5px;
+            }
+            
+            .korrektur-status-value {
+              font-family: monospace;
+            }
+            
+            .korrektur-status-value.positiv {
+              color: #2e7d32;
+            }
+            
+            .korrektur-status-value.negativ {
+              color: #c62828;
+            }
+
+            .manual-corrections-container {
+              border: 1px solid #ddd;
+              border-radius: 5px;
+              padding: 10px;
+              margin-top: 15px;
+              background-color: #f9f9f9;
+            }
+            
+            .korrektur-status {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 15px;
+              margin-bottom: 10px;
+            }
+            
+            .korrektur-status-item {
+              display: flex;
+              align-items: center;
+            }
+            
+            .korrektur-status-label {
+              font-weight: bold;
+              margin-right: 5px;
+            }
+            
+            .korrektur-status-value {
+              font-family: monospace;
+            }
+            
+            .korrektur-status-value.positiv {
+              color: #2e7d32;
+            }
+            
+            .korrektur-status-value.negativ {
+              color: #c62828;
+            }
           `}
         </style>
         <table>
@@ -876,7 +1131,10 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               </colgroup>
               <tbody>
                 {punkte.map((punkt, index) => {
+                  const displayPunkt = displayPunkte[index]; // Verwende displayPunkt für deltaH-Anzeige
                   const isStatic = index === 0 || index === punkte.length - 1;
+                  const isWechselpunkt = punkt.punktNr.startsWith('W');
+                  const korrekturWert = fehlerKorrekturen[index];
                   
                   return (
                     <SortableTableRow 
@@ -916,14 +1174,42 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                             )}
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
-                              onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
-                              disabled={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1)}
-                              className={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? 'disabled-input' : ''}
-                            />
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
+                                onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
+                                disabled={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1)}
+                                className={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? 'disabled-input' : ''}
+                              />
+                              
+                              {(isWechselpunkt || (index === 0 && punkt.punktNr.startsWith('MB'))) && isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) && (
+                                <div className="korrektur-container">
+                                  {korrekturWert !== undefined && korrekturWert !== 0 && (
+                                    <span className="korrektur-wert">
+                                      {korrekturWert > 0 ? '+' : ''}{Math.round(korrekturWert)}
+                                    </span>
+                                  )}
+                                  <div className="korrektur-buttons">
+                                    <button 
+                                      className="korrektur-button" 
+                                      onClick={() => addPunktKorrektur(index, true)}
+                                      title="Korrektur erhöhen (+1 mm)"
+                                    >
+                                      +
+                                    </button>
+                                    <button 
+                                      className="korrektur-button" 
+                                      onClick={() => addPunktKorrektur(index, false)}
+                                      title="Korrektur verringern (-1 mm)"
+                                    >
+                                      -
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <input
@@ -946,7 +1232,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                             />
                           </td>
                           <td>
-                            <span>{punkt.deltaH !== null ? punkt.deltaH.toFixed(3) : '-'}</span>
+                            <span>{displayPunkt.deltaH !== null ? displayPunkt.deltaH.toFixed(3) : '-'}</span>
                           </td>
                           <td>
                             {(index === 0) ? (
@@ -954,7 +1240,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                             ) : (index === punkte.length - 1) ? (
                               <span>{endPunkt.absoluteHoehe !== null ? endPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
                             ) : (
-                              <span>{punkt.absoluteHoehe !== null ? punkt.absoluteHoehe.toFixed(3) : '-'}</span>
+                              <span>{displayPunkt.absoluteHoehe !== null ? displayPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
                             )}
                           </td>
                           <td>
@@ -1141,55 +1427,39 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               <span>{probeMittelblicke() ? 'Korrekt ✓' : 'Fehler ✗'}</span>
             </div>
           </div>
+          
+          {/* Statusanzeige für manuelle Korrekturen wenn vorhanden */}
+          {Object.keys(fehlerKorrekturen).length > 0 && (
+            <div className="manual-corrections-container">
+              <div className="korrektur-status">
+                <div className="korrektur-status-item">
+                  <span className="korrektur-status-label">Fehler v:</span>
+                  <span className={`korrektur-status-value ${calculateFehlerV() >= 0 ? 'positiv' : 'negativ'}`}>
+                    {Math.round(calculateFehlerV() * 1000)} mm
+                  </span>
+                </div>
+                <div className="korrektur-status-item">
+                  <span className="korrektur-status-label">Summe Korrekturen:</span>
+                  <span className={`korrektur-status-value ${calculateGesamtKorrektur() > 0 ? 'positiv' : 'negativ'}`}>
+                    {Math.round(calculateGesamtKorrektur())} mm
+                  </span>
+                </div>
+              </div>
+              <div className="korrektur-actions">
+                <button
+                  className="korrektur-reset-button"
+                  onClick={resetKorrekturen}
+                  title="Korrekturen zurücksetzen"
+                >
+                  Korrekturen zurücksetzen
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
-      
-      <div className="punkt-info">
-        <h4 className="punkt-info-title">Hinweise zur Bedienung:</h4>
-        <ul className="punkt-info-list">
-          <li className="punkt-info-item">
-            <strong>Neue Zeile:</strong> Wählen Sie den Punkttyp in der untersten Zeile aus und klicken Sie auf "Hinzufügen" oder drücken Sie Strg+Enter in einem der Eingabefelder.
-          </li>
-          <li className="punkt-info-item">
-            <strong>Punkttyp wechseln:</strong> Drücken Sie Strg+Pfeil hoch oder Strg+Pfeil runter in der Eingabezeile, um zwischen W und M zu wechseln.
-          </li>
-          <li className="punkt-info-item">
-            <strong>Umordnen:</strong> Zeilen können mit dem Ziehgriff links verschoben werden (Start- und Endpunkt bleiben fixiert).
-          </li>
-        </ul>
-
-        <h4 className="punkt-info-title">Punktbezeichnungen und Messregeln:</h4>
-        <ul className="punkt-info-list">
-          <li className="punkt-info-item">
-            <strong>MB[Nummer]</strong>: Amtliche Höhen (Messpunkte) am Anfang und Ende des Nivellements.
-            <ul>
-              <li>Der erste MB-Punkt hat nur Rückblick.</li>
-              <li>Der letzte MB-Punkt hat nur Vorblick.</li>
-            </ul>
-          </li>
-          <li className="punkt-info-item">
-            <strong>W[Nummer]</strong>: Wechselpunkte mit Rückblick und Vorblick.
-            <ul>
-              <li>Für W-Punkte gilt: Δh = r<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
-              <li>Die Absolute Höhe berechnet sich aus: h = h<sub>vorheriger Punkt</sub> + Δh</li>
-            </ul>
-          </li>
-          <li className="punkt-info-item">
-            <strong>M[Nummer]</strong>: Mittelblick-Punkte mit Mittelblick und Vorblick.
-            <ul>
-              <li>Für den ersten Mittelblick nach W/MB: Δh = r<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
-              <li>Für weitere Mittelblicke nach einem Mittelblick: Δh = m<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
-              <li>Die Probe: Δh<sub>W bis W</sub> = ΣΔh<sub>Mittelblicke</sub></li>
-            </ul>
-          </li>
-        </ul>
-        <div className="wichtiger-hinweis punkt-info-wichtig">
-          <h4>Wichtig:</h4>
-          <p>Das Nivellement wird erst komplett ohne Mittelblicke ausgewertet!</p>
-        </div>
-      </div>
     </>
   );
 };
 
-export default NivellementTable; 
+export default NivellementTable;
