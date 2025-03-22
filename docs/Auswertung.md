@@ -1,0 +1,34 @@
+- Absolute Höhe: 
+    - Höhe über Normalhöhenull (NHN -> NAP: Normaal Amsterdams Peil) 
+        -> Abstand zum Quasigeoid (gravitative Äquipotentiallinie)
+
+- Grundprinzip des geometrischen Nivellements (mit selbsthorizontierendem Nivellierinstrument): 
+    - jedes Nivellement startet und endet an einem amtlichen Höhenfestpunkt:
+        -> Mauerbolzen: Abkürzung: MBxx (xx zu ersetzen mit entspr. Nummer)
+    - Wechselpunkte W_i: 
+        - Bezeichnung: "W_i" (i zu ersetzen mit laufender Nummer, Startwert = 1)
+        - zu jedem Wechselpunkt gibt es einen Rückblick und einen Vorblick
+            -> Rückblick "r": entgegengesetzt zur Messrichtung
+            -> Vorblick "v": mit der Messrichtung
+        - delta h ergibt sich immer aus der Differenz zwischen dem Rückblick zum vorherigen Wechselpunkt (oder Startpunkt) und dem Vorblick zum aktuellen Wechselpunkt (Grundformel: delta h_i = r_i-1(zum vorherigen Messpunkt) - v_i(zum aktuellen Messpunkt))
+        - Abstand zwischen den Wechselpunkten ca. 40m -> Zielweite ca. 20m, da das Messinstrument ca. mittig zwischen den Wechselpunkten platziert wird
+        - die Absolute Höhe "H" (NHN) eines Wechselpunktes berechnet sich aus: 
+            -> Absolute Höhe des vorherigen Wechselpunktes (oder Startpunkt) H_vor + delta h des aktuellen Wechselpunktes (Vorzeichen von dehlta h beachten)
+    - Mittelblick m_i: 
+        - steht in der Auswertungstabelle zwischen zwei Wechselpunkten (oder eine Reihe von Mittelblicken)
+            -> delta h_m,i = r_i-1 - m_i (erster Mittelblick einer Reihe / einziger Mittelblick) oder m_i - m_i+1 (Mittelblick innerhalb einer Reihe) oder m - v (letzter Mittelblick einer Reihe)
+        - Probe für einen Mittelblick:
+            -> delta h_Probe = m_i - v_i+1 (Wechselpunkt nach Mittelblick)
+            -> Absolute Höhe h_Probe = Absolute Höhe h_i (von m_i) + delta h_Probe == Absolute Höhe h_i+1 (Wechselpunkt nach Mittelblick)
+    - Auswertung: 
+        - das Nivellement wird zunächst komplett ohne Mittelblicke ausgewertet
+        - delta h_ist = Summe(r) - Summe(v) -> nur Wecheslpunkte
+        - delta h_soll = amtliche Höhe (NHN) Endpunkt - amtliche Höhe (NHN) Startpunkt
+        - Fehler v = delta h_soll - delta h_ist
+        - zulässiger Fehler v_zulässig = 15 * sqrt(Streckenlänge)
+            -> Probe: v < v_zulässig ? 
+            -> der Fehler v wird möglichst gleichmäßig auf die Rückblicke r der Wechselpunkte W verteilt (nur in ganzen mm). 
+            -> delta h der Wechselpunkte wird dann mit den korrigierten Werten der Rückblicke r berechnet
+        - Probe: Summe(delta h (nur Wechselpunkte)) == delta h_soll ?
+        - Berechnung der Absoluten Höhen: h_i = h_i-1 + delta h_i
+        - dann Auswertung der Mittelblicke (s.o.)
