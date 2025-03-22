@@ -1,54 +1,122 @@
-# React + TypeScript + Vite
+# Nivellement-Berechnung
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Eine Webanwendung zur Berechnung und Verwaltung von Nivellements, entwickelt mit React und TypeScript.
 
-Currently, two official plugins are available:
+## Entwicklungsumgebung einrichten
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Voraussetzungen
+- Node.js (empfohlen: Version 18 oder höher)
+- npm (wird mit Node.js installiert)
 
-## Expanding the ESLint configuration
+### Installation
+```bash
+# Repository klonen
+git clone https://github.com/dein-username/Nivellement-Berechnung.git
+cd Nivellement-Berechnung
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Abhängigkeiten installieren
+npm install
+```
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
+## Entwicklungsbefehle
+
+```bash
+# Entwicklungsserver starten
+npm run dev
+
+# Codequalität prüfen
+npm run lint
+
+# Build für Produktion erstellen
+npm run build
+
+# Build lokal testen
+npm run preview
+```
+
+## Deployment auf GitHub Pages
+
+### Erstmaliges Einrichten
+1. GitHub-Repository erstellen (falls noch nicht geschehen)
+2. Lokales Git-Repository initialisieren und mit GitHub verbinden:
+```bash
+git init
+git add .
+git commit -m "Erster Commit"
+git remote add origin https://github.com/dein-username/Nivellement-Berechnung.git
+git branch -M main
+git push -u origin main
+```
+
+3. GitHub Pages Abhängigkeit installieren:
+```bash
+npm install --save-dev gh-pages
+```
+
+4. In `package.json` die folgenden Einträge hinzufügen:
+```json
+"homepage": "https://dein-username.github.io/Nivellement-Berechnung",
+"scripts": {
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+}
+```
+
+5. In `vite.config.ts` die Base-URL hinzufügen:
+```typescript
+export default defineConfig({
+  plugins: [react()],
+  base: '/Nivellement-Berechnung/',
 })
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Deployment durchführen
+```bash
+# Änderungen zum GitHub-Repository hinzufügen
+git add .
+git commit -m "Beschreibung der Änderungen"
+git push
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+# Auf GitHub Pages deployen
+npm run deploy
 ```
+
+### GitHub Pages Einstellungen
+Nach dem ersten Deployment:
+1. Gehe zu den Repository-Einstellungen
+2. Wähle "Pages" im Menü
+3. Setze als Source "Deploy from a branch"
+4. Wähle den Branch "gh-pages" und den Ordner "/ (root)"
+5. Klicke auf "Save"
+
+## Git-Workflow
+
+```bash
+# Status prüfen
+git status
+
+# Änderungen hinzufügen
+git add .
+
+# Commit erstellen
+git commit -m "Beschreibung der Änderungen"
+
+# Änderungen hochladen
+git push
+
+# Aktuellen Stand vom Server holen
+git pull
+```
+
+## Projektstruktur
+
+- `src/` - Quellcode-Dateien
+  - `components/` - React-Komponenten
+  - `models/` - TypeScript-Typdefinitionen
+  - `utils/` - Hilfsfunktionen
+- `public/` - Statische Dateien
+- `dist/` - Build-Ausgabe (wird beim Build generiert)
+
+## Hinweis
+
+Diese Anwendung wurde zu privaten Lernzwecken entwickelt und befindet sich noch in der Entwicklungsphase. Es wird keine Haftung oder Gewähr für die Nutzung übernommen.

@@ -10,6 +10,7 @@ const App = () => {
   const [selectedNivellementId, setSelectedNivellementId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState<boolean>(false)
   const [selectedNivellement, setSelectedNivellement] = useState<Nivellement | undefined>(undefined)
+  const [showDisclaimer, setShowDisclaimer] = useState<boolean>(true)
 
   // Nivellements beim Start laden
   useEffect(() => {
@@ -51,6 +52,17 @@ const App = () => {
 
   return (
     <div className="app-container">
+      {showDisclaimer && (
+        <div className="disclaimer-alert">
+          <div className="disclaimer-content">
+            <h3>Wichtiger Hinweis</h3>
+            <p>Diese Anwendung befindet sich in der Entwicklung. Es wird keine Haftung oder Gewähr für die Nutzung übernommen.</p>
+            <p>Alle eingegebenen Daten werden ausschließlich im lokalen Speicher (localStorage) Ihres Browsers gespeichert und nicht an Server übertragen.</p>
+            <button onClick={() => setShowDisclaimer(false)}>Verstanden</button>
+          </div>
+        </div>
+      )}
+      
       <header className="app-header">
         <h1>Nivellement-Berechnung</h1>
       </header>
@@ -80,7 +92,7 @@ const App = () => {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2024 - Nivellement App für Vermessungslehre</p>
+        <p>&copy; 2024 Leon Hollmann - Entwickelt zu privaten Lernzwecken - Keine Haftung übernommen</p>
       </footer>
     </div>
   )

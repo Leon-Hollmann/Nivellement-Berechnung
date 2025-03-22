@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { NivellementPunkt } from '../models/types';
 import {
   DndContext,
@@ -258,7 +258,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
     let wCount = 0;
     let mCount = 0;
     
-    return points.map((point, index) => {
+    return points.map(point => {
       // MB-Punkte nicht verändern
       if (point.punktNr.startsWith('MB')) {
         return point;
