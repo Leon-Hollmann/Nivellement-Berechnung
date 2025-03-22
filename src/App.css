@@ -450,6 +450,7 @@ tr[data-punkt-type="M"] {
 
 .punkt-info-item li {
   margin-bottom: 0.25rem;
+  font-family: 'Cambria Math', 'Times New Roman', serif;
 }
 
 .punkt-info-wichtig {
@@ -543,4 +544,106 @@ tr:first-child, tr:last-child {
   background-color: #cccccc;
   color: #666666;
   cursor: not-allowed;
+}
+
+/* Tabellenauswertung Stile */
+.table-summary {
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.summary-row {
+  background-color: var(--secondary-color);
+  font-weight: bold;
+}
+
+.summary-label {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.summary-value {
+  border-top: 2px solid var(--border-color);
+  text-align: right;
+  padding: 0.5rem 1rem;
+  font-family: 'Cambria Math', 'Times New Roman', serif;
+  font-size: 1.05em;
+}
+
+.auswertung-summary {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.5rem;
+  background-color: white;
+  padding: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.auswertung-summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem;
+  border-radius: 4px;
+  align-items: center;
+}
+
+.auswertung-summary-item sub {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  bottom: -0.25em;
+}
+
+.auswertung-summary-item span:first-child {
+  margin-right: 10px;
+  font-family: 'Cambria Math', 'Times New Roman', serif;
+  font-size: 1.05em;
+}
+
+.auswertung-summary-item.success {
+  background-color: rgba(30, 142, 62, 0.1);
+  color: var(--success-color);
+}
+
+.auswertung-summary-item.error {
+  background-color: rgba(217, 48, 37, 0.1);
+  color: var(--error-color);
+}
+
+/* Styling für die Streckencontainer */
+.strecke-wrapper {
+  justify-content: flex-start;
+}
+
+.strecke-container {
+  flex: 0 0 calc(50% - 10px);
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.strecke-container .input-group {
+  display: flex;
+  align-items: center;
+}
+
+.strecke-container .input-group label {
+  width: 150px;
+  font-weight: bold;
+  margin-bottom: 0;
+}
+
+.strecke-container .input-group input {
+  flex: 1;
+  padding: 5px;
 }

@@ -20,7 +20,7 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
   // Diese Werte werden direkt aus den Punkten abgeleitet
   const defaultStartHoehe = initialNivellement?.startHoehe || 100;
   const defaultEndHoehe = initialNivellement?.endHoehe || 100;
-  const defaultStreckeLaenge = initialNivellement?.streckeLaenge || 1;
+  const [streckeLaenge, setStreckeLaenge] = useState<number>(initialNivellement?.streckeLaenge || 1);
   
   // Initialisiere Punkte mit MB-Start und MB-Ende
   const [punkte, setPunkte] = useState<NivellementPunkt[]>(
@@ -53,9 +53,21 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
   useEffect(() => {
     // Aktuelle Werte aus den Punkten extrahieren
     const currentStartHoehe = punkte.length > 0 ? punkte[0].absoluteHoehe || defaultStartHoehe : defaultStartHoehe;
+    const currentEndHoehe = punkte.length > 1 ? punkte[punkte.length - 1].absoluteHoehe || defaultEndHoehe : defaultEndHoehe;
     
     // Vermeide Updates, wenn sich nichts geändert hat
     const updatedPunkte = updateNivellementPunkte([...punkte], currentStartHoehe);
+    
+    // Stelle sicher, dass der Endpunkt die korrekte Höhe hat
+    if (updatedPunkte.length > 1) {
+      const lastIndex = updatedPunkte.length - 1;
+      if (updatedPunkte[lastIndex].punktNr.startsWith('MB')) {
+        updatedPunkte[lastIndex] = {
+          ...updatedPunkte[lastIndex],
+          absoluteHoehe: currentEndHoehe
+        };
+      }
+    }
     
     // Prüfe, ob sich tatsächlich etwas geändert hat
     const hasChanged = JSON.stringify(updatedPunkte) !== JSON.stringify(punkte);
@@ -64,9 +76,6 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
       setPunkte(updatedPunkte);
     }
     
-    // Aktuelle Endwerte ermitteln
-    const currentEndHoehe = punkte.length > 1 ? punkte[punkte.length - 1].absoluteHoehe || defaultEndHoehe : defaultEndHoehe;
-    
     // Nivellement erstellen und auswerten
     const nivellement: Nivellement = {
       id: nivellementId,
@@ -74,17 +83,21 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
       datum,
       startHoehe: currentStartHoehe,
       endHoehe: currentEndHoehe,
-      streckeLaenge: defaultStreckeLaenge,
+      streckeLaenge,
       punkte: updatedPunkte,
       auswertung: null
     };
     
     const newAuswertung = evaluateNivellement(nivellement);
     setAuswertung(newAuswertung);
-  }, [punkte, nivellementId, name, datum, defaultStartHoehe, defaultEndHoehe, defaultStreckeLaenge]);
+  }, [punkte, nivellementId, name, datum, defaultStartHoehe, defaultEndHoehe, streckeLaenge]);
   
   const handlePunkteChange = (newPunkte: NivellementPunkt[]) => {
     setPunkte(newPunkte);
+  };
+  
+  const handleStreckeLaengeChange = (newStreckeLaenge: number) => {
+    setStreckeLaenge(newStreckeLaenge);
   };
   
   const handleSave = () => {
@@ -92,14 +105,26 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
     const currentStartHoehe = punkte.length > 0 ? punkte[0].absoluteHoehe || defaultStartHoehe : defaultStartHoehe;
     const currentEndHoehe = punkte.length > 1 ? punkte[punkte.length - 1].absoluteHoehe || defaultEndHoehe : defaultEndHoehe;
     
+    // Stelle sicher, dass die Endpunkthöhe korrekt ist
+    const updatedPunkte = [...punkte];
+    if (updatedPunkte.length > 1) {
+      const lastIndex = updatedPunkte.length - 1;
+      if (updatedPunkte[lastIndex].punktNr.startsWith('MB')) {
+        updatedPunkte[lastIndex] = {
+          ...updatedPunkte[lastIndex],
+          absoluteHoehe: currentEndHoehe
+        };
+      }
+    }
+    
     const nivellement: Nivellement = {
       id: nivellementId,
       name,
       datum,
       startHoehe: currentStartHoehe,
       endHoehe: currentEndHoehe,
-      streckeLaenge: defaultStreckeLaenge,
-      punkte,
+      streckeLaenge,
+      punkte: updatedPunkte,
       auswertung
     };
     
@@ -138,11 +163,12 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
       
       <div className="table-container">
         <h3>Messdaten</h3>
-        <NivellementTable punkte={punkte} onChange={handlePunkteChange} />
-      </div>
-      
-      <div className="auswertung-section">
-        <NivellementAuswertungView auswertung={auswertung} />
+        <NivellementTable 
+          punkte={punkte} 
+          onChange={handlePunkteChange} 
+          streckeLaenge={streckeLaenge}
+          onStreckeLaengeChange={handleStreckeLaengeChange}
+        />
       </div>
       
       <div className="form-actions">

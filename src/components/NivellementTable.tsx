@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NivellementPunkt } from '../models/types';
 import {
   DndContext,
@@ -79,9 +79,16 @@ const getPunktType = (punktNr: string) => {
 interface NivellementTableProps {
   punkte: NivellementPunkt[];
   onChange: (punkte: NivellementPunkt[]) => void;
+  streckeLaenge?: number;
+  onStreckeLaengeChange?: (streckeLaenge: number) => void;
 }
 
-const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange }) => {
+const NivellementTable: React.FC<NivellementTableProps> = ({ 
+  punkte, 
+  onChange, 
+  streckeLaenge: propStreckeLaenge, 
+  onStreckeLaengeChange 
+}) => {
   // Referenzen für Start- und Endpunkt
   const [startPunkt, setStartPunkt] = useState({
     punktNr: punkte.length > 0 ? punkte[0].punktNr : 'MB25',
@@ -93,6 +100,24 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
     absoluteHoehe: punkte.length > 0 ? punkte[punkte.length - 1].absoluteHoehe : 148.786
   });
   
+  // Streckenlänge in km
+  const [streckeLaenge, setStreckeLaenge] = useState<number>(propStreckeLaenge || 1);
+
+  // Wenn die Streckenlänge von den Props geändert wird, aktualisiere den lokalen State
+  useEffect(() => {
+    if (propStreckeLaenge !== undefined) {
+      setStreckeLaenge(propStreckeLaenge);
+    }
+  }, [propStreckeLaenge]);
+
+  // Aktualisiere die Parent-Komponente bei Änderungen der Streckenlänge
+  const handleStreckeLaengeChange = (value: number) => {
+    setStreckeLaenge(value);
+    if (onStreckeLaengeChange) {
+      onStreckeLaengeChange(value);
+    }
+  };
+
   // Leere Zeile, die am Ende angezeigt wird
   const [newRow, setNewRow] = useState<NivellementPunkt>({
     punktNr: '',
@@ -118,6 +143,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
       },
     })
   );
+
+  // Refs für die Eingabefelder
+  const rueckblickRef = useRef<HTMLInputElement>(null);
+  const mittelblickRef = useRef<HTMLInputElement>(null);
+  const vorblickRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (index: number, field: keyof NivellementPunkt, value: string) => {
     let updatedPunkte = [...punkte];
@@ -150,7 +180,22 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
 
   // Funktion zum Ändern der Eingaben in der neuen Zeile
   const handleNewRowInputChange = (field: keyof NivellementPunkt, value: string) => {
-    if (field === 'punktNr' || field === 'bemerkung') {
+    if (field === 'punktNr') {
+      const newState = {
+        ...newRow,
+        [field]: value
+      };
+      setNewRow(newState);
+      
+      // Fokus zum passenden Feld basierend auf dem gewählten Punkttyp setzen
+      setTimeout(() => {
+        if (value === 'W' && rueckblickRef.current) {
+          rueckblickRef.current.focus();
+        } else if (value === 'M' && mittelblickRef.current) {
+          mittelblickRef.current.focus();
+        }
+      }, 10);
+    } else if (field === 'bemerkung') {
       setNewRow({
         ...newRow,
         [field]: value
@@ -240,6 +285,94 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
     return true;
   };
 
+  // Berechnungsfunktionen für die Zusammenfassung
+  const calculateSummeRueckblick = (): number => {
+    // Nur W-Punkte und MB-Punkte in die Berechnung einbeziehen
+    return punkte
+      .filter(punkt => punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB'))
+      .reduce((sum, punkt) => sum + (punkt.rueckblick || 0), 0);
+  };
+
+  const calculateSummeVorblick = (): number => {
+    // Nur W-Punkte und MB-Punkte in die Berechnung einbeziehen
+    return punkte
+      .filter(punkt => punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB'))
+      .reduce((sum, punkt) => sum + (punkt.vorblick || 0), 0);
+  };
+
+  const calculateSummeDeltaH = (): number => {
+    return punkte.reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
+  };
+
+  const calculateDeltaHIst = (): number => {
+    return calculateSummeRueckblick() - calculateSummeVorblick();
+  };
+
+  const calculateDeltaHSoll = (): number => {
+    if (punkte.length < 2) return 0;
+    const startHoehe = punkte[0].absoluteHoehe || 0;
+    const endHoehe = punkte[punkte.length - 1].absoluteHoehe || 0;
+    return endHoehe - startHoehe;
+  };
+
+  const calculateFehlerV = (): number => {
+    return calculateDeltaHSoll() - calculateDeltaHIst();
+  };
+
+  const calculateZulaessigerFehler = (): number => {
+    // Verwende die eingegebene Streckenlänge in km
+    return 0.015 * Math.sqrt(streckeLaenge);
+  };
+
+  const isFehlerZulaessig = (): boolean => {
+    return Math.abs(calculateFehlerV()) <= calculateZulaessigerFehler();
+  };
+
+  const isSummeDeltaHKorrekt = (): boolean => {
+    return Math.abs(calculateSummeDeltaH() - calculateDeltaHSoll()) < 0.001;
+  };
+
+  const probeMittelblicke = (): boolean => {
+    // Suche nach M-Punkten, die von W-Punkten umgeben sind
+    for (let i = 0; i < punkte.length; i++) {
+      const punkt = punkte[i];
+      if (!punkt.punktNr.startsWith('M')) continue;
+      
+      // Finde den nächsten W-Punkt nach diesem M-Punkt
+      let nextWIndex = -1;
+      for (let j = i + 1; j < punkte.length; j++) {
+        if (punkte[j].punktNr.startsWith('W') || punkte[j].punktNr.startsWith('MB')) {
+          nextWIndex = j;
+          break;
+        }
+      }
+      
+      if (nextWIndex > -1) {
+        // Prüfe, ob die Höhe des W-Punkts durch direkte Berechnung vom M-Punkt erreichbar ist
+        const mPunkt = punkt;
+        const wPunkt = punkte[nextWIndex];
+        
+        if (mPunkt.mittelblick !== null && wPunkt.vorblick !== null && 
+            mPunkt.absoluteHoehe !== null && wPunkt.absoluteHoehe !== null) {
+          
+          // Berechne den Höhenunterschied direkt: m - v
+          const direkterHöhenunterschied = mPunkt.mittelblick - wPunkt.vorblick;
+          
+          // Berechne die erwartete absolute Höhe des W-Punkts
+          const erwarteteHöhe = mPunkt.absoluteHoehe + direkterHöhenunterschied;
+          
+          // Prüfe, ob die erwartete Höhe mit der tatsächlichen Höhe übereinstimmt
+          const höhenDifferenz = Math.abs(erwarteteHöhe - wPunkt.absoluteHoehe);
+          if (höhenDifferenz > 0.001) { // Toleranz von 1mm
+            return false;
+          }
+        }
+      }
+    }
+    
+    return true;
+  };
+
   // Funktion zum Bestimmen des neuen Punkttyps basierend auf dem vorherigen Punkt
   const getNewPunktTyp = (prevPunkt: NivellementPunkt) => {
     if (prevPunkt.punktNr.startsWith('MB')) {
@@ -288,6 +421,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
   // Funktion zum Hinzufügen der Zeile mit anschließender Neunummerierung
   const addNewRow = () => {
     if (newRow.punktNr && (newRow.punktNr === 'W' || newRow.punktNr === 'M')) {
+      // Speichere den aktuell gewählten Punkttyp
+      const currentPunktTyp = newRow.punktNr;
+      
       // Füge die neue Zeile vor dem letzten Punkt ein
       let updatedPunkte = [...punkte.slice(0, -1), newRow, punkte[punkte.length - 1]];
       
@@ -296,9 +432,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
       
       onChange(updatedPunkte);
       
-      // Setze die neue Zeile zurück
+      // Setze die neue Zeile zurück, aber behalte den Punkttyp bei
       setNewRow({
-        punktNr: getNextPunktNr(newRow.punktNr),
+        punktNr: currentPunktTyp, // Behalte den aktuellen Punkttyp bei
         rueckblick: null,
         mittelblick: null,
         vorblick: null,
@@ -306,6 +442,27 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
         absoluteHoehe: null,
         bemerkung: ''
       });
+    }
+  };
+
+  // Event-Handler für Tastenkombination Strg+Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prüfe, ob Strg+Enter gedrückt wurde
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault(); // Verhindere Standardverhalten
+      addNewRow();
+    }
+    
+    // Dropdown-Werte mit Strg+Pfeil hoch/runter wechseln
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault(); // Verhindere Standardverhalten
+      
+      // Wechsle zwischen W und M
+      if (newRow.punktNr === 'W') {
+        handleNewRowInputChange('punktNr', 'M');
+      } else {
+        handleNewRowInputChange('punktNr', 'W');
+      }
     }
   };
 
@@ -408,6 +565,21 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   onChange={(e) => handleEndPunktChange('absoluteHoehe', e.target.value)}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="setup-container strecke-wrapper">
+          <div className="strecke-container">
+            <div className="input-group">
+              <label>Streckenlänge [km]:</label>
+              <input 
+                type="number" 
+                step="0.001" 
+                min="0.001"
+                value={streckeLaenge} 
+                onChange={(e) => handleStreckeLaengeChange(parseFloat(e.target.value) || 1)} 
+              />
             </div>
           </div>
         </div>
@@ -672,7 +844,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
               <th>Rückblick [r]</th>
               <th>Mittelblick [m]</th>
               <th>Vorblick [v]</th>
-              <th>Delta h</th>
+              <th>Δh</th>
               <th>Absolute Höhe h</th>
               <th>Bemerkung</th>
               <th>Aktionen</th>
@@ -831,6 +1003,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   value={newRow.punktNr}
                   onChange={(e) => handleNewRowInputChange('punktNr', e.target.value)}
                   className="new-row-dropdown"
+                  onKeyDown={handleKeyDown}
                 >
                   <option value="W">Wechselpunkt (W)</option>
                   <option value="M">Mittelblick (M)</option>
@@ -838,6 +1011,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
               </td>
               <td>
                 <input
+                  ref={rueckblickRef}
                   type="number"
                   step="0.001"
                   value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
@@ -845,10 +1019,12 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   disabled={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1)}
                   className={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? 'disabled-input' : ''}
                   placeholder="Rückblick"
+                  onKeyDown={handleKeyDown}
                 />
               </td>
               <td>
                 <input
+                  ref={mittelblickRef}
                   type="number"
                   step="0.001"
                   value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
@@ -856,10 +1032,12 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   disabled={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1)}
                   className={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? 'disabled-input' : ''}
                   placeholder="Mittelblick"
+                  onKeyDown={handleKeyDown}
                 />
               </td>
               <td>
                 <input
+                  ref={vorblickRef}
                   type="number"
                   step="0.001"
                   value={newRow.vorblick !== null ? newRow.vorblick : ''}
@@ -867,6 +1045,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   disabled={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1)}
                   className={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? 'disabled-input' : ''}
                   placeholder="Vorblick"
+                  onKeyDown={handleKeyDown}
                 />
               </td>
               <td>
@@ -881,6 +1060,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
                   value={newRow.bemerkung}
                   onChange={(e) => handleNewRowInputChange('bemerkung', e.target.value)}
                   placeholder="Bemerkung"
+                  onKeyDown={handleKeyDown}
                 />
               </td>
               <td className="action-buttons">
@@ -897,11 +1077,81 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
         </table>
       </div>
       
+      {/* Füge Auswertungszusammenfassung direkt unter Tabelle hinzu */}
+      {punkte.length > 0 && (
+        <div className="table-summary">
+          <table className="summary-table">
+            <colgroup>
+              <col className="col-handle" />
+              <col className="col-punkt-nr" />
+              <col className="col-rueckblick" />
+              <col className="col-mittelblick" />
+              <col className="col-vorblick" />
+              <col className="col-delta-h" />
+              <col className="col-abs-hoehe" />
+              <col className="col-bemerkung" />
+              <col className="col-aktionen" />
+            </colgroup>
+            <tbody>
+              <tr className="summary-row">
+                <td colSpan={2} className="summary-label">Summe:</td>
+                <td className="summary-value">
+                  Σr = {calculateSummeRueckblick().toFixed(3)}
+                </td>
+                <td></td>
+                <td className="summary-value">
+                  Σv = {calculateSummeVorblick().toFixed(3)}
+                </td>
+                <td className="summary-value">
+                  ΣΔh = {calculateSummeDeltaH().toFixed(3)}
+                </td>
+                <td colSpan={3}></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          {/* Kurze Zusammenfassung der wichtigsten Auswertungsinformationen */}
+          <div className="auswertung-summary">
+            <div className="auswertung-summary-item">
+              <span>Δh<sub>ist</sub> = Σr - Σv: </span>
+              <span>{calculateDeltaHIst().toFixed(3)} m</span>
+            </div>
+            <div className="auswertung-summary-item">
+              <span>Δh<sub>soll</sub> = h<sub>Ende</sub> - h<sub>Start</sub>: </span>
+              <span>{calculateDeltaHSoll().toFixed(3)} m</span>
+            </div>
+            <div className="auswertung-summary-item">
+              <span>Fehler v = Δh<sub>soll</sub> - Δh<sub>ist</sub>: </span>
+              <span>{calculateFehlerV().toFixed(3)} m</span>
+            </div>
+            <div className="auswertung-summary-item">
+              <span>Zulässiger Fehler v<sub>zul</sub> = 15mm · √L: </span>
+              <span>{calculateZulaessigerFehler().toFixed(3)} m</span>
+            </div>
+            <div className={`auswertung-summary-item ${isFehlerZulaessig() ? 'success' : 'error'}`}>
+              <span>Fehler zulässig: |v| ≤ v<sub>zul</sub></span>
+              <span>{isFehlerZulaessig() ? 'Ja ✓' : 'Nein ✗'}</span>
+            </div>
+            <div className={`auswertung-summary-item ${isSummeDeltaHKorrekt() ? 'success' : 'error'}`}>
+              <span>Summe Δh = Δh<sub>soll</sub>: </span>
+              <span>{isSummeDeltaHKorrekt() ? 'Ja ✓' : 'Nein ✗'}</span>
+            </div>
+            <div className={`auswertung-summary-item ${probeMittelblicke() ? 'success' : 'error'}`}>
+              <span>Mittelblick-Probe: h<sub>W</sub> = h<sub>M</sub> + (m - v)</span>
+              <span>{probeMittelblicke() ? 'Korrekt ✓' : 'Fehler ✗'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="punkt-info">
         <h4 className="punkt-info-title">Hinweise zur Bedienung:</h4>
         <ul className="punkt-info-list">
           <li className="punkt-info-item">
-            <strong>Neue Zeile:</strong> Wählen Sie den Punkttyp in der untersten Zeile aus und klicken Sie auf "Hinzufügen".
+            <strong>Neue Zeile:</strong> Wählen Sie den Punkttyp in der untersten Zeile aus und klicken Sie auf "Hinzufügen" oder drücken Sie Strg+Enter in einem der Eingabefelder.
+          </li>
+          <li className="punkt-info-item">
+            <strong>Punkttyp wechseln:</strong> Drücken Sie Strg+Pfeil hoch oder Strg+Pfeil runter in der Eingabezeile, um zwischen W und M zu wechseln.
           </li>
           <li className="punkt-info-item">
             <strong>Umordnen:</strong> Zeilen können mit dem Ziehgriff links verschoben werden (Start- und Endpunkt bleiben fixiert).
@@ -921,7 +1171,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
             <strong>W[Nummer]</strong>: Wechselpunkte mit Rückblick und Vorblick.
             <ul>
               <li>Für W-Punkte gilt: Δh = r<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
-              <li>Die Absolute Höhe berechnet sich aus: H<sub>vorheriger Punkt</sub> + Δh</li>
+              <li>Die Absolute Höhe berechnet sich aus: h = h<sub>vorheriger Punkt</sub> + Δh</li>
             </ul>
           </li>
           <li className="punkt-info-item">
@@ -929,7 +1179,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({ punkte, onChange })
             <ul>
               <li>Für den ersten Mittelblick nach W/MB: Δh = r<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
               <li>Für weitere Mittelblicke nach einem Mittelblick: Δh = m<sub>vorheriger Punkt</sub> - v<sub>aktueller Punkt</sub></li>
-              <li>Die Probe: Δh<sub>W bis W</sub> = Σ Δh<sub>Mittelblicke</sub></li>
+              <li>Die Probe: Δh<sub>W bis W</sub> = ΣΔh<sub>Mittelblicke</sub></li>
             </ul>
           </li>
         </ul>

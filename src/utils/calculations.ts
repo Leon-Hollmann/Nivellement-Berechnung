@@ -216,9 +216,33 @@ export const updateNivellementPunkte = (
     if (i > 0 && deltaH !== null) {
       const prevPunkt = updatedPunkte[i - 1];
       if (prevPunkt.absoluteHoehe !== null) {
-        const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, deltaH);
-        updatedPunkte[i] = {
-          ...updatedPunkte[i],
+        // Für jeden Punkt außer dem letzten
+        if (i < updatedPunkte.length - 1) {
+          const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, deltaH);
+          updatedPunkte[i] = {
+            ...updatedPunkte[i],
+            absoluteHoehe
+          };
+        }
+      }
+    }
+  }
+  
+  // Stelle sicher, dass der letzte Punkt seine ursprüngliche absolute Höhe behält
+  // (wenn vorhanden, sonst berechnen wir sie)
+  const lastIndex = updatedPunkte.length - 1;
+  if (lastIndex > 0) {
+    const lastPunkt = updatedPunkte[lastIndex];
+    // Wenn der letzte Punkt eine MB-Markierung ist, behalten wir seine vorhandene Höhe bei
+    if (lastPunkt.punktNr.startsWith('MB') && lastPunkt.absoluteHoehe !== null) {
+      // absoluteHoehe bleibt unverändert
+    } else {
+      // Berechne die Höhe basierend auf dem vorherigen Punkt und Delta H
+      const prevPunkt = updatedPunkte[lastIndex - 1];
+      if (prevPunkt.absoluteHoehe !== null && lastPunkt.deltaH !== null) {
+        const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, lastPunkt.deltaH);
+        updatedPunkte[lastIndex] = {
+          ...updatedPunkte[lastIndex],
           absoluteHoehe
         };
       }
