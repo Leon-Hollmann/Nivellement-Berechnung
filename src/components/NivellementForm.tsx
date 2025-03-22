@@ -22,6 +22,9 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
   const defaultEndHoehe = initialNivellement?.endHoehe || 100;
   const [streckeLaenge, setStreckeLaenge] = useState<number>(initialNivellement?.streckeLaenge || 1);
   
+  // State für Korrekturen
+  const [korrekturen, setKorrekturen] = useState<Record<number, number>>(initialNivellement?.korrekturen || {});
+  
   // Initialisiere Punkte mit MB-Start und MB-Ende
   const [punkte, setPunkte] = useState<NivellementPunkt[]>(
     initialNivellement?.punkte || [
@@ -32,7 +35,8 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
         vorblick: null,
         deltaH: null,
         absoluteHoehe: defaultStartHoehe,
-        bemerkung: 'Amtliche Höhe Start'
+        bemerkung: 'Amtliche Höhe Start',
+        korrektur: null
       },
       {
         punktNr: initialNivellement?.punkte?.[initialNivellement?.punkte.length - 1]?.punktNr || 'MB2',
@@ -41,7 +45,8 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
         vorblick: null,
         deltaH: null,
         absoluteHoehe: defaultEndHoehe,
-        bemerkung: 'Amtliche Höhe Ende'
+        bemerkung: 'Amtliche Höhe Ende',
+        korrektur: null
       }
     ]
   );
@@ -85,12 +90,13 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
       endHoehe: currentEndHoehe,
       streckeLaenge,
       punkte: updatedPunkte,
-      auswertung: null
+      auswertung: null,
+      korrekturen
     };
     
     const newAuswertung = evaluateNivellement(nivellement);
     setAuswertung(newAuswertung);
-  }, [punkte, nivellementId, name, datum, defaultStartHoehe, defaultEndHoehe, streckeLaenge]);
+  }, [punkte, nivellementId, name, datum, defaultStartHoehe, defaultEndHoehe, streckeLaenge, korrekturen]);
   
   const handlePunkteChange = (newPunkte: NivellementPunkt[]) => {
     setPunkte(newPunkte);
@@ -98,6 +104,10 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
   
   const handleStreckeLaengeChange = (newStreckeLaenge: number) => {
     setStreckeLaenge(newStreckeLaenge);
+  };
+
+  const handleKorrekturenChange = (newKorrekturen: Record<number, number>) => {
+    setKorrekturen(newKorrekturen);
   };
   
   const handleSave = () => {
@@ -125,7 +135,8 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
       endHoehe: currentEndHoehe,
       streckeLaenge,
       punkte: updatedPunkte,
-      auswertung
+      auswertung,
+      korrekturen
     };
     
     saveNivellement(nivellement);
@@ -168,6 +179,8 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
           onChange={handlePunkteChange} 
           streckeLaenge={streckeLaenge}
           onStreckeLaengeChange={handleStreckeLaengeChange}
+          korrekturen={korrekturen}
+          onKorrekturenChange={handleKorrekturenChange}
         />
       </div>
       

@@ -17,6 +17,7 @@
     - Mittelblick m_i: 
         - steht in der Auswertungstabelle zwischen zwei Wechselpunkten (oder eine Reihe von Mittelblicken)
             -> delta h_m,i = r_i-1 - m_i (erster Mittelblick einer Reihe / einziger Mittelblick) oder m_i - m_i+1 (Mittelblick innerhalb einer Reihe) oder m - v (letzter Mittelblick einer Reihe)
+            -> Absolute Höhe h_i = h_i-1 + delta h_i (dabei ist egal, ob die vorherige absolute Höhe von einem Wechselpunkt oder einem Mittelblick kommt!)
         - Probe für einen Mittelblick:
             -> delta h_Probe = m_i - v_i+1 (Wechselpunkt nach Mittelblick)
             -> Absolute Höhe h_Probe = Absolute Höhe h_i (von m_i) + delta h_Probe == Absolute Höhe h_i+1 (Wechselpunkt nach Mittelblick)

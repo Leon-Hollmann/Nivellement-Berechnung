@@ -6,6 +6,7 @@ export interface NivellementPunkt {
   deltaH: number | null;
   absoluteHoehe: number | null;
   bemerkung: string;
+  korrektur: number | null;
 }
 
 export interface NivellementAuswertung {
@@ -30,4 +31,5 @@ export interface Nivellement {
   streckeLaenge: number; // in Kilometern
   punkte: NivellementPunkt[];
   auswertung: NivellementAuswertung | null;
+  korrekturen: Record<number, number>;
 } 

@@ -76,17 +76,27 @@ export const calculateDeltaH = (
   }
 
   if (currentPunktTyp === 'M') {
-    // Mittelblick nach W/MB: Delta H ist Rückblick des vorherigen Punkts - Vorblick des aktuellen
-    if (prevPunkt && prevPunkt.rueckblick !== null && currentPunkt.vorblick !== null) {
-      const korrigierterRueckblick = applyRueckblickKorrektur(prevPunkt.rueckblick, prevPunktIndex);
-      return korrigierterRueckblick - currentPunkt.vorblick;
+    // Hole den direkten Vorgänger (unabhängig vom Typ)
+    const directPrevPunkt = rowIndex > 0 ? punkte[rowIndex - 1] : null;
+    const directPrevPunktTyp = directPrevPunkt ? getPunktTyp(directPrevPunkt.punktNr) : null;
+    
+    // Fall 1: Erster Mittelblick nach W/MB-Punkt
+    if (directPrevPunktTyp === 'W' || directPrevPunktTyp === 'MB') {
+      // deltaH = r_vorheriger - m_aktueller
+      if (directPrevPunkt && directPrevPunkt.rueckblick !== null && currentPunkt.mittelblick !== null) {
+        const korrigierterRueckblick = applyRueckblickKorrektur(directPrevPunkt.rueckblick, rowIndex - 1);
+        return korrigierterRueckblick - currentPunkt.mittelblick;
+      }
     }
     
-    // Mittelblick nach M: Delta H ist Mittelblick des vorherigen Punkts - Vorblick des aktuellen
-    const prevRow = punkte[rowIndex - 1];
-    if (prevRow && getPunktTyp(prevRow.punktNr) === 'M' && prevRow.mittelblick !== null && currentPunkt.vorblick !== null) {
-      return prevRow.mittelblick - currentPunkt.vorblick;
+    // Fall 2: Mittelblick nach einem anderen Mittelblick
+    else if (directPrevPunktTyp === 'M') {
+      // deltaH = m_vorheriger - m_aktueller
+      if (directPrevPunkt && directPrevPunkt.mittelblick !== null && currentPunkt.mittelblick !== null) {
+        return directPrevPunkt.mittelblick - currentPunkt.mittelblick;
+      }
     }
+    
     return null;
   }
 
@@ -220,49 +230,67 @@ export const updateNivellementPunkte = (
     };
   }
   
-  // Berechne Delta H und absolute Höhe für alle Punkte
-  for (let i = 0; i < updatedPunkte.length; i++) {
-    // Delta H berechnen
+  // Berechne Delta H für alle Punkte
+  for (let i = 1; i < updatedPunkte.length; i++) {
     const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
     updatedPunkte[i] = {
       ...updatedPunkte[i],
       deltaH
     };
+  }
+  
+  // Berechne absolute Höhen für Wechselpunkte und MB-Punkte
+  let lastWMBIndex = 0; // Start mit dem ersten Punkt (MB)
+  for (let i = 1; i < updatedPunkte.length; i++) {
+    const punktTyp = getPunktTyp(updatedPunkte[i].punktNr);
     
-    // Absolute Höhe berechnen (für alle Punkte außer dem ersten)
-    if (i > 0 && deltaH !== null) {
-      const prevPunkt = updatedPunkte[i - 1];
-      if (prevPunkt.absoluteHoehe !== null) {
-        // Für jeden Punkt außer dem letzten
-        if (i < updatedPunkte.length - 1) {
-          const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, deltaH);
+    if (punktTyp === 'W' || punktTyp === 'MB') {
+      // Berechne die Höhe des Wechselpunkts basierend auf dem letzten Wechselpunkt
+      if (updatedPunkte[lastWMBIndex].absoluteHoehe !== null && 
+          updatedPunkte[i].deltaH !== null) {
+        
+        const absoluteHoehe = calculateAbsoluteHoehe(
+          updatedPunkte[lastWMBIndex].absoluteHoehe, 
+          updatedPunkte[i].deltaH
+        );
+        
+        // Aktualisiere den Wechselpunkt (nicht für den letzten MB Punkt)
+        if (!(i === updatedPunkte.length - 1 && punktTyp === 'MB')) {
           updatedPunkte[i] = {
             ...updatedPunkte[i],
             absoluteHoehe
           };
         }
       }
+      
+      // Setze diesen als letzten W/MB-Punkt
+      lastWMBIndex = i;
+    }
+  }
+  
+  // Berechne absolute Höhen für Mittelblicke
+  for (let i = 1; i < updatedPunkte.length; i++) {
+    const punktTyp = getPunktTyp(updatedPunkte[i].punktNr);
+    
+    if (punktTyp === 'M') {
+      // Direkt vom vorherigen Punkt ausgehen, egal ob W, MB oder M
+      if (updatedPunkte[i-1].absoluteHoehe !== null && updatedPunkte[i].deltaH !== null) {
+        const absoluteHoehe = calculateAbsoluteHoehe(updatedPunkte[i-1].absoluteHoehe, updatedPunkte[i].deltaH);
+        updatedPunkte[i] = {
+          ...updatedPunkte[i],
+          absoluteHoehe
+        };
+      }
     }
   }
   
   // Stelle sicher, dass der letzte Punkt seine ursprüngliche absolute Höhe behält
-  // (wenn vorhanden, sonst berechnen wir sie)
   const lastIndex = updatedPunkte.length - 1;
   if (lastIndex > 0) {
     const lastPunkt = updatedPunkte[lastIndex];
     // Wenn der letzte Punkt eine MB-Markierung ist, behalten wir seine vorhandene Höhe bei
     if (lastPunkt.punktNr.startsWith('MB') && lastPunkt.absoluteHoehe !== null) {
       // absoluteHoehe bleibt unverändert
-    } else {
-      // Berechne die Höhe basierend auf dem vorherigen Punkt und Delta H
-      const prevPunkt = updatedPunkte[lastIndex - 1];
-      if (prevPunkt.absoluteHoehe !== null && lastPunkt.deltaH !== null) {
-        const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, lastPunkt.deltaH);
-        updatedPunkte[lastIndex] = {
-          ...updatedPunkte[lastIndex],
-          absoluteHoehe
-        };
-      }
     }
   }
   

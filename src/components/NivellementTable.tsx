@@ -82,6 +82,8 @@ interface NivellementTableProps {
   onChange: (punkte: NivellementPunkt[]) => void;
   streckeLaenge?: number;
   onStreckeLaengeChange?: (streckeLaenge: number) => void;
+  korrekturen?: Record<number, number>;
+  onKorrekturenChange?: (korrekturen: Record<number, number>) => void;
 }
 
 // Hilfsfunktion zum Anzuwenden von Korrekturen auf deltaH
@@ -100,18 +102,49 @@ const applyKorrekturenToDeltaH = (
       ...updatedPunkte[i],
       deltaH
     };
+  }
+  
+  // Berechne absolute Höhen für Wechselpunkte und MB-Punkte
+  let lastWMBIndex = 0; // Start mit dem ersten Punkt (MB)
+  for (let i = 1; i < updatedPunkte.length; i++) {
+    const punktTyp = getPunktType(updatedPunkte[i].punktNr);
     
-    // Aktualisiere auch die absolute Höhe
-    if (i > 0 && deltaH !== null) {
-      const prevPunkt = updatedPunkte[i - 1];
-      if (prevPunkt.absoluteHoehe !== null) {
-        const absoluteHoehe = calculateAbsoluteHoehe(prevPunkt.absoluteHoehe, deltaH);
-        if (i < updatedPunkte.length - 1) { // Nicht für den letzten Punkt
+    if (punktTyp === 'W' || punktTyp === 'MB') {
+      // Berechne die Höhe des Wechselpunkts basierend auf dem letzten Wechselpunkt
+      if (updatedPunkte[lastWMBIndex].absoluteHoehe !== null && 
+          updatedPunkte[i].deltaH !== null) {
+        
+        const absoluteHoehe = calculateAbsoluteHoehe(
+          updatedPunkte[lastWMBIndex].absoluteHoehe, 
+          updatedPunkte[i].deltaH
+        );
+        
+        // Aktualisiere den Wechselpunkt (nicht für den letzten MB Punkt)
+        if (!(i === updatedPunkte.length - 1 && punktTyp === 'MB')) {
           updatedPunkte[i] = {
             ...updatedPunkte[i],
             absoluteHoehe
           };
         }
+      }
+      
+      // Setze diesen als letzten W/MB-Punkt
+      lastWMBIndex = i;
+    }
+  }
+  
+  // Berechne absolute Höhen für Mittelblicke
+  for (let i = 1; i < updatedPunkte.length; i++) {
+    const punktTyp = getPunktType(updatedPunkte[i].punktNr);
+    
+    if (punktTyp === 'M') {
+      // Direkt vom vorherigen Punkt ausgehen, egal ob W, MB oder M
+      if (updatedPunkte[i-1].absoluteHoehe !== null && updatedPunkte[i].deltaH !== null) {
+        const absoluteHoehe = calculateAbsoluteHoehe(updatedPunkte[i-1].absoluteHoehe, updatedPunkte[i].deltaH);
+        updatedPunkte[i] = {
+          ...updatedPunkte[i],
+          absoluteHoehe
+        };
       }
     }
   }
@@ -123,7 +156,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   punkte, 
   onChange, 
   streckeLaenge: propStreckeLaenge, 
-  onStreckeLaengeChange 
+  onStreckeLaengeChange,
+  korrekturen: propKorrekturen,
+  onKorrekturenChange
 }) => {
   // Referenzen für Start- und Endpunkt
   const [startPunkt, setStartPunkt] = useState({
@@ -162,7 +197,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     vorblick: null,
     deltaH: null,
     absoluteHoehe: null,
-    bemerkung: ''
+    bemerkung: '',
+    korrektur: null
   });
 
   // Sensoren für Drag-and-Drop
@@ -337,8 +373,10 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   };
 
   const calculateSummeDeltaH = (): number => {
-    // Hier verwenden wir displayPunkte, um die Korrekturen zu berücksichtigen
-    return displayPunkte.reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
+    // Nur Wechselpunkte und MB-Punkte in die Berechnung einbeziehen
+    return displayPunkte.filter(punkt => 
+      punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB')
+    ).reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
   };
 
   const calculateDeltaHIst = (): number => {
@@ -477,7 +515,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
         vorblick: null,
         deltaH: null,
         absoluteHoehe: null,
-        bemerkung: ''
+        bemerkung: '',
+        korrektur: null
       });
     }
   };
@@ -556,7 +595,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   };
 
   // State für Fehlerverteilung
-  const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<number, number>>({});
+  const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<number, number>>(propKorrekturen || {});
 
   // Berechne die Anzahl der Wechselpunkte (für die Fehlerverteilung)
   const countWechselPunkte = (): number => {
@@ -568,15 +607,27 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     // Standardwert für Korrektur in mm (1 mm statt 0.1 mm)
     const korrekturWert = positiv ? 1 : -1;
     
-    setFehlerKorrekturen(prev => ({
-      ...prev,
-      [index]: (prev[index] || 0) + korrekturWert
-    }));
+    const updatedKorrekturen = {
+      ...fehlerKorrekturen,
+      [index]: (fehlerKorrekturen[index] || 0) + korrekturWert
+    };
+    
+    setFehlerKorrekturen(updatedKorrekturen);
+    
+    // Informiere die Elternkomponente über die Änderung der Korrekturen
+    if (onKorrekturenChange) {
+      onKorrekturenChange(updatedKorrekturen);
+    }
   };
 
   // Zurücksetzen der Korrekturen
   const resetKorrekturen = () => {
     setFehlerKorrekturen({});
+    
+    // Informiere die Elternkomponente über die Änderung der Korrekturen
+    if (onKorrekturenChange) {
+      onKorrekturenChange({});
+    }
   };
 
   // Berechne die Summe aller aktuellen Korrekturen in mm
@@ -594,6 +645,13 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     const updatedDisplayPunkte = applyKorrekturenToDeltaH(punkte, fehlerKorrekturen);
     setDisplayPunkte(updatedDisplayPunkte);
   }, [punkte, fehlerKorrekturen]);
+
+  // Aktualisiere den lokalen State, wenn sich die Props ändern
+  useEffect(() => {
+    if (propKorrekturen && JSON.stringify(propKorrekturen) !== JSON.stringify(fehlerKorrekturen)) {
+      setFehlerKorrekturen(propKorrekturen);
+    }
+  }, [propKorrekturen]);
 
   return (
     <>
@@ -1444,6 +1502,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                     {Math.round(calculateGesamtKorrektur())} mm
                   </span>
                 </div>
+              </div>
+              <div className="korrektur-hinweis">
+                <p style={{ margin: '5px 0', fontSize: '0.9em', color: '#333', fontStyle: 'italic' }}>
+                  <span style={{ fontWeight: 'bold' }}>Hinweis:</span> Die Korrekturwerte werden in der Berechnung von Δh berücksichtigt und beim Speichern des Nivellements gesichert.
+                </p>
               </div>
               <div className="korrektur-actions">
                 <button
