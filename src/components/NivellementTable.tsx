@@ -133,6 +133,44 @@ const applyKorrekturenToDeltaH = (
     }
   }
   
+  // Speziell für den Endpunkt (letzter MB-Punkt)
+  // Finde den letzten Wechselpunkt vor dem Endpunkt
+  let lastWIndex = -1;
+  for (let i = updatedPunkte.length - 2; i >= 0; i--) {
+    if (updatedPunkte[i].punktNr.startsWith('W')) {
+      lastWIndex = i;
+      break;
+    }
+  }
+  
+  // Wenn ein Wechselpunkt gefunden wurde und der Endpunkt ein MB-Punkt ist
+  if (lastWIndex !== -1 && updatedPunkte[updatedPunkte.length - 1].punktNr.startsWith('MB')) {
+    const endIndex = updatedPunkte.length - 1;
+    const lastWPunkt = updatedPunkte[lastWIndex];
+    const endPunkt = updatedPunkte[endIndex];
+    
+    // Berechne deltaH für den Endpunkt basierend auf dem letzten Wechselpunkt
+    if (lastWPunkt.rueckblick !== null && endPunkt.vorblick !== null) {
+      // Hilfsfunktion, um Korrektur auf Rückblick anzuwenden
+      const applyRueckblickKorrektur = (rueckblick: number | null, index: number): number => {
+        if (rueckblick === null) return 0;
+        // Korrektur in mm zu m umrechnen und zum Rückblick addieren
+        const korrektur = korrekturen[index] || 0;
+        const korrekturInMeter = korrektur / 1000;
+        return rueckblick + korrekturInMeter;
+      };
+      
+      const korrigierterRueckblick = applyRueckblickKorrektur(lastWPunkt.rueckblick, lastWIndex);
+      const deltaH = korrigierterRueckblick - endPunkt.vorblick;
+      
+      // Aktualisiere den deltaH-Wert des Endpunkts
+      updatedPunkte[endIndex] = {
+        ...endPunkt,
+        deltaH
+      };
+    }
+  }
+  
   // Berechne absolute Höhen für Mittelblicke
   for (let i = 1; i < updatedPunkte.length; i++) {
     const punktTyp = getPunktType(updatedPunkte[i].punktNr);
@@ -172,7 +210,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   });
   
   // Streckenlänge in km
-  const [streckeLaenge, setStreckeLaenge] = useState<number>(propStreckeLaenge || 1);
+  const [streckeLaenge, setStreckeLaenge] = useState<number | null>(propStreckeLaenge || null);
 
   // Wenn die Streckenlänge von den Props geändert wird, aktualisiere den lokalen State
   useEffect(() => {
@@ -182,10 +220,10 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   }, [propStreckeLaenge]);
 
   // Aktualisiere die Parent-Komponente bei Änderungen der Streckenlänge
-  const handleStreckeLaengeChange = (value: number) => {
+  const handleStreckeLaengeChange = (value: number | null) => {
     setStreckeLaenge(value);
     if (onStreckeLaengeChange) {
-      onStreckeLaengeChange(value);
+      onStreckeLaengeChange(value || 0);
     }
   };
 
@@ -305,6 +343,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
       // Nummeriere alle Punkte neu
       updatedPunkte = renumberPoints(updatedPunkte);
       
+      // Aktualisiere displayPunkte sofort, um Fehler zu vermeiden
+      setDisplayPunkte(applyKorrekturenToDeltaH(updatedPunkte, fehlerKorrekturen));
+      
       onChange(updatedPunkte);
     }
   };
@@ -319,6 +360,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     
     // Nummeriere alle Punkte neu
     updatedPunkte = renumberPoints(updatedPunkte);
+    
+    // Aktualisiere displayPunkte sofort, um Fehler zu vermeiden
+    setDisplayPunkte(applyKorrekturenToDeltaH(updatedPunkte, fehlerKorrekturen));
     
     onChange(updatedPunkte);
   };
@@ -385,7 +429,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
 
   const calculateZulaessigerFehler = (): number => {
     // Verwende die eingegebene Streckenlänge in km
-    return 0.015 * Math.sqrt(streckeLaenge);
+    return streckeLaenge ? 0.015 * Math.sqrt(streckeLaenge) : 0;
   };
 
   const isFehlerZulaessig = (): boolean => {
@@ -400,7 +444,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     // Suche nach M-Punkten, die von W-Punkten umgeben sind
     for (let i = 0; i < punkte.length; i++) {
       const punkt = punkte[i];
-      if (!punkt.punktNr.startsWith('M')) continue;
+      // Überspringe MB-Startpunkt und alle Punkte, die nicht mit M beginnen
+      if (i === 0 || !punkt.punktNr.startsWith('M')) continue;
       
       // Finde den nächsten W-Punkt nach diesem M-Punkt
       let nextWIndex = -1;
@@ -416,17 +461,21 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
         const mPunkt = punkt;
         const wPunkt = punkte[nextWIndex];
         
+        // Verwende die korrigierten Höhen aus displayPunkte
+        const mDisplayPunkt = displayPunkte[i];
+        const wDisplayPunkt = displayPunkte[nextWIndex];
+        
         if (mPunkt.mittelblick !== null && wPunkt.vorblick !== null && 
-            mPunkt.absoluteHoehe !== null && wPunkt.absoluteHoehe !== null) {
+            mDisplayPunkt.absoluteHoehe !== null && wDisplayPunkt.absoluteHoehe !== null) {
           
           // Berechne den Höhenunterschied direkt: m - v
           const direkterHöhenunterschied = mPunkt.mittelblick - wPunkt.vorblick;
           
           // Berechne die erwartete absolute Höhe des W-Punkts
-          const erwarteteHöhe = mPunkt.absoluteHoehe + direkterHöhenunterschied;
+          const erwarteteHöhe = mDisplayPunkt.absoluteHoehe + direkterHöhenunterschied;
           
           // Prüfe, ob die erwartete Höhe mit der tatsächlichen Höhe übereinstimmt
-          const höhenDifferenz = Math.abs(erwarteteHöhe - wPunkt.absoluteHoehe);
+          const höhenDifferenz = Math.abs(erwarteteHöhe - wDisplayPunkt.absoluteHoehe);
           if (höhenDifferenz > 0.001) { // Toleranz von 1mm
             return false;
           }
@@ -435,6 +484,85 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     }
     
     return true;
+  };
+
+  // Neue Funktion, um alle Mittelblick-Proben auszuführen und Details zurückzugeben
+  const getMittelblickProben = () => {
+    const proben: {
+      mPunktNr: string;
+      wPunktNr: string;
+      mHoehe: number | null;
+      wHoehe: number | null;
+      mBlick: number | null;
+      vBlick: number | null;
+      hoehendifferenz: number | null;
+      erwarteteHoehe: number | null;
+      differenz: number | null;
+      korrekt: boolean;
+    }[] = [];
+    
+    for (let i = 0; i < punkte.length; i++) {
+      const punkt = punkte[i];
+      // Überspringe MB-Startpunkt und alle Punkte, die nicht mit M beginnen
+      if (i === 0 || !punkt.punktNr.startsWith('M')) continue;
+      
+      // Finde den nächsten W-Punkt nach diesem M-Punkt
+      let nextWIndex = -1;
+      for (let j = i + 1; j < punkte.length; j++) {
+        if (punkte[j].punktNr.startsWith('W') || punkte[j].punktNr.startsWith('MB')) {
+          nextWIndex = j;
+          break;
+        }
+      }
+      
+      if (nextWIndex > -1) {
+        const mPunkt = punkt;
+        const wPunkt = punkte[nextWIndex];
+        
+        // Verwende die korrigierten Höhen aus displayPunkte
+        const mDisplayPunkt = displayPunkte[i];
+        const wDisplayPunkt = displayPunkte[nextWIndex];
+        
+        let probe = {
+          mPunktNr: mPunkt.punktNr,
+          wPunktNr: wPunkt.punktNr,
+          mHoehe: mDisplayPunkt.absoluteHoehe, // Korrigierte Höhe verwenden
+          wHoehe: wDisplayPunkt.absoluteHoehe, // Korrigierte Höhe verwenden
+          mBlick: mPunkt.mittelblick,
+          vBlick: wPunkt.vorblick,
+          hoehendifferenz: null as number | null,
+          erwarteteHoehe: null as number | null,
+          differenz: null as number | null,
+          korrekt: false
+        };
+        
+        if (mPunkt.mittelblick !== null && wPunkt.vorblick !== null && 
+            mDisplayPunkt.absoluteHoehe !== null && wDisplayPunkt.absoluteHoehe !== null) {
+          
+          // Berechne den Höhenunterschied: m - v
+          const hoehendifferenz = mPunkt.mittelblick - wPunkt.vorblick;
+          
+          // Berechne die erwartete absolute Höhe des W-Punkts
+          const erwarteteHoehe = mDisplayPunkt.absoluteHoehe + hoehendifferenz;
+          
+          // Prüfe, ob die erwartete Höhe mit der tatsächlichen Höhe übereinstimmt
+          const differenz = erwarteteHoehe - wDisplayPunkt.absoluteHoehe;
+          const korrekt = Math.abs(differenz) <= 0.001; // Toleranz von 1mm
+          
+          probe = {
+            ...probe,
+            hoehendifferenz,
+            erwarteteHoehe,
+            differenz,
+            korrekt
+          };
+        }
+        
+        proben.push(probe);
+      }
+    }
+    
+    return proben;
   };
 
   // Funktion zum Bestimmen des neuen Punkttyps basierend auf dem vorherigen Punkt
@@ -494,6 +622,10 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
       // Nummeriere alle Punkte neu
       updatedPunkte = renumberPoints(updatedPunkte);
       
+      // Aktualisiere auch displayPunkte sofort, um Fehler zu vermeiden
+      setDisplayPunkte(applyKorrekturenToDeltaH(updatedPunkte, fehlerKorrekturen));
+      
+      // Informiere die übergeordnete Komponente über die Änderung
       onChange(updatedPunkte);
       
       // Setze die neue Zeile zurück, aber behalte den Punkttyp bei
@@ -637,6 +769,21 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     }
   }, [propKorrekturen]);
 
+  // State für Mittelblick-Proben Sichtbarkeit
+  const [mittelblickProbenVisible, setMittelblickProbenVisible] = useState<boolean>(false);
+
+  // Prüft, ob alle Mittelblick-Proben korrekt sind
+  const probenAlleKorrekt = (): boolean => {
+    const proben = getMittelblickProben();
+    return proben.length > 0 && proben.every(probe => probe.korrekt);
+  };
+  
+  // Gibt die Anzahl fehlerhafter Proben zurück
+  const getFehlerCount = (): number => {
+    const proben = getMittelblickProben();
+    return proben.filter(probe => !probe.korrekt).length;
+  };
+
   return (
     <>
       <div className="nivellement-setup">
@@ -696,8 +843,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                 type="number" 
                 step="0.001" 
                 min="0.001"
-                value={streckeLaenge} 
-                onChange={(e) => handleStreckeLaengeChange(parseFloat(e.target.value) || 1)} 
+                value={streckeLaenge !== null ? streckeLaenge : ''}
+                onChange={(e) => handleStreckeLaengeChange(e.target.value === '' ? null : parseFloat(e.target.value))} 
               />
             </div>
           </div>
@@ -1173,7 +1320,8 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               </colgroup>
               <tbody>
                 {punkte.map((punkt, index) => {
-                  const displayPunkt = displayPunkte[index]; // Verwende displayPunkt für deltaH-Anzeige
+                  // Sicherstellen, dass displayPunkte[index] existiert
+                  const displayPunkt = displayPunkte[index] || punkt;
                   const isStatic = index === 0 || index === punkte.length - 1;
                   const isWechselpunkt = punkt.punktNr.startsWith('W');
                   const korrekturWert = fehlerKorrekturen[index];
@@ -1469,6 +1617,97 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               <span>{probeMittelblicke() ? 'Korrekt ✓' : 'Fehler ✗'}</span>
             </div>
           </div>
+          
+          {/* Mittelblick-Proben detailliert anzeigen */}
+          {getMittelblickProben().length > 0 && (
+            <div className="mittelblick-proben-container">
+              <div 
+                className="mittelblick-proben-header" 
+                onClick={() => setMittelblickProbenVisible(!mittelblickProbenVisible)}
+                style={{ 
+                  cursor: 'pointer', 
+                  padding: '8px 10px', 
+                  backgroundColor: '#f2f2f2', 
+                  borderRadius: '5px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '15px',
+                  marginBottom: '10px'
+                }}
+              >
+                <h4 style={{ margin: 0 }}>Mittelblick-Proben</h4>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {!mittelblickProbenVisible && (
+                    <span style={{ 
+                      marginRight: '10px', 
+                      color: !probenAlleKorrekt() ? 'red' : 'green',
+                      fontSize: '0.9em',
+                      fontWeight: 'bold'
+                    }}>
+                      {!probenAlleKorrekt() 
+                        ? `${getFehlerCount()} Proben fehlerhaft` 
+                        : 'Alle Proben korrekt'}
+                    </span>
+                  )}
+                  <span style={{ 
+                    transform: mittelblickProbenVisible ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s ease'
+                  }}>
+                    ▼
+                  </span>
+                </div>
+              </div>
+              {mittelblickProbenVisible && (
+                <div className="mittelblick-proben-list" style={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: '10px',
+                  marginBottom: '10px'
+                }}>
+                  {getMittelblickProben().map((probe, index) => (
+                    <div 
+                      key={index} 
+                      className={`mittelblick-probe ${probe.korrekt ? 'korrekt' : 'fehler'}`} 
+                      style={{ 
+                        border: '1px solid #ddd', 
+                        padding: '10px', 
+                        borderRadius: '5px',
+                        backgroundColor: probe.korrekt ? '#f0fff0' : '#fff0f0',
+                        flex: '1 1 300px',
+                        maxWidth: 'calc(50% - 10px)',
+                        fontSize: '0.9em'
+                      }}
+                    >
+                      <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                        Probe: {probe.mPunktNr} → {probe.wPunktNr}
+                        <span style={{ 
+                          marginLeft: '10px', 
+                          color: probe.korrekt ? 'green' : 'red',
+                          float: 'right'
+                        }}>
+                          {probe.korrekt ? '✓' : '✗'}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
+                        <div>Höhe {probe.mPunktNr}: {probe.mHoehe?.toFixed(3)} m</div>
+                        <div>Mittelblick: {probe.mBlick?.toFixed(3)} m</div>
+                        <div>Vorblick {probe.wPunktNr}: {probe.vBlick?.toFixed(3)} m</div>
+                        <div style={{ marginTop: '5px', paddingTop: '5px', borderTop: '1px dashed #ccc' }}>
+                          Δh (m-v): {probe.hoehendifferenz?.toFixed(3)} m
+                        </div>
+                        <div>Erw. {probe.wPunktNr}: {probe.erwarteteHoehe?.toFixed(3)} m</div>
+                        <div>Ist {probe.wPunktNr}: {probe.wHoehe?.toFixed(3)} m</div>
+                        <div style={{ fontWeight: 'bold' }}>
+                          Diff: {probe.differenz !== null ? Math.abs(probe.differenz).toFixed(3) : '-'} m
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Statusanzeige für manuelle Korrekturen wenn vorhanden */}
           {Object.keys(fehlerKorrekturen).length > 0 && (
