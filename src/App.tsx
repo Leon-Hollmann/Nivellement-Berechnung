@@ -65,6 +65,7 @@ const App = () => {
       
       <header className="app-header">
         <h1>Nivellement-Berechnung</h1>
+        <div className="dev-banner">Entwicklungsversion - Nicht für produktiven Einsatz</div>
       </header>
 
       <main className="app-content">

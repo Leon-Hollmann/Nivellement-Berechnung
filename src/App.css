@@ -78,6 +78,17 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.dev-banner {
+  background-color: #ff9800;
+  color: #000;
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 4px 8px;
+  margin-top: 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
 .app-content {
   flex: 1;
   padding: 1.5rem;

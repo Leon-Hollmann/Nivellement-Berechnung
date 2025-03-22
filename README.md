@@ -1,5 +1,7 @@
 # Nivellement-Berechnung
 
+[![Status: In Entwicklung](https://img.shields.io/badge/Status-In%20Entwicklung-yellow)](https://github.com/TheOfflineone/Nivellement-Berechnung)
+
 Eine Webanwendung zur Berechnung und Verwaltung von Nivellements, entwickelt mit React und TypeScript.
 
 ## Entwicklungsumgebung einrichten
@@ -116,6 +118,24 @@ git pull
   - `utils/` - Hilfsfunktionen
 - `public/` - Statische Dateien
 - `dist/` - Build-Ausgabe (wird beim Build generiert)
+
+## Versionen und Releases
+
+Um den Entwicklungsstatus deiner Anwendung zu verwalten:
+
+```bash
+# Einen neuen Release-Tag erstellen (z.B. für eine Alpha-Version)
+git tag -a v0.1.0-alpha -m "Alpha-Version mit Grundfunktionen"
+git push origin v0.1.0-alpha
+
+# Tag anzeigen
+git tag
+```
+
+Releases auf GitHub:
+1. Im Repository auf "Releases" > "Create a new release" klicken
+2. Vorhandenen Tag auswählen oder neuen erstellen
+3. Release als "Pre-release" oder "Draft" markieren, um den Entwicklungsstatus zu verdeutlichen
 
 ## Hinweis
 
