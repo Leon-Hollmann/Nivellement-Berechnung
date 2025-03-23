@@ -379,6 +379,18 @@ tr[data-punkt-type="M"] {
   background-color: rgba(76, 175, 80, 0.1);
 }
 
+/* Entfernung der Pfeile aus Zahlenfeldern für alle Browser */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .punkt-info {
   margin-top: 2rem;
   padding: 1rem;

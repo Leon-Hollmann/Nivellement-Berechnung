@@ -35,6 +35,19 @@ import {
 import { NivellementPunkt } from '../models/types';
 import { calculateDeltaH, calculateAbsoluteHoehe } from '../utils/calculations';
 
+// CSS für die Entfernung der Pfeile aus Zahlenfeldern
+const GlobalStyles = styled('style')({
+  ['@global']: {
+    'input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button': {
+      WebkitAppearance: 'none',
+      margin: 0
+    },
+    'input[type=number]': {
+      MozAppearance: 'textfield'
+    }
+  }
+});
+
 // Hilfsfunktion zum Formatieren von Zahlen
 const formatNumber = (value: number): string => {
   return value.toFixed(3);
@@ -53,6 +66,16 @@ const StyledTableRow = styled(TableRow, {
       backgroundColor: '#f7f0ff',
       borderTop: `2px solid ${theme.palette.secondary.main}`,
       borderBottom: `2px solid ${theme.palette.secondary.main}`
+    }
+  }),
+  ...(punktType === 'W' && {
+    '& td': {
+      backgroundColor: 'rgba(76, 175, 79, 0.07)' // Seichtes Grün für Wechselpunkte
+    }
+  }),
+  ...(punktType === 'M' && {
+    '& td': {
+      backgroundColor: 'rgba(255, 235, 59, 0.07)' // Seichtes Gelb für Mittelblicke
     }
   }),
   opacity: isDragging ? 0.5 : 1
@@ -167,12 +190,60 @@ const applyKorrekturenToDeltaH = (
   
   // Berechne deltaH für alle Punkte mit Korrekturen
   for (let i = 1; i < updatedPunkte.length; i++) {
-    // Verwende die Funktion aus der Utility, die Korrekturen berücksichtigt
-    const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
-    updatedPunkte[i] = {
-      ...updatedPunkte[i],
-      deltaH
-    };
+    // Für den Endpunkt (MB) müssen wir manuell den letzten Wechselpunkt finden
+    if (i === updatedPunkte.length - 1 && updatedPunkte[i].punktNr.startsWith('MB')) {
+      // Finde den letzten Wechselpunkt (W oder MB) vor dem Endpunkt
+      let lastWPIndex = -1;
+      for (let j = i - 1; j >= 0; j--) {
+        if (updatedPunkte[j].punktNr.startsWith('W') || updatedPunkte[j].punktNr.startsWith('MB')) {
+          lastWPIndex = j;
+          break;
+        }
+      }
+      
+      // Wenn ein Wechselpunkt gefunden wurde, berechne deltaH manuell
+      if (lastWPIndex !== -1) {
+        const lastWP = updatedPunkte[lastWPIndex];
+        const currentMB = updatedPunkte[i];
+        
+        // Prüfe, ob die benötigten Werte vorhanden sind
+        if (lastWP.rueckblick !== null && currentMB.vorblick !== null) {
+          // Anwendung der Korrektur auf den Rückblick des letzten Wechselpunkts
+          let korrekturWert = 0;
+          if (lastWP.punktNr && korrekturen[lastWP.punktNr] !== undefined) {
+            korrekturWert = korrekturen[lastWP.punktNr] / 1000; // Umrechnung von mm in m
+          }
+          
+          // Berechne deltaH manuell: korrigierter Rückblick - Vorblick
+          const deltaH = (lastWP.rueckblick + korrekturWert) - currentMB.vorblick;
+          
+          updatedPunkte[i] = {
+            ...updatedPunkte[i],
+            deltaH
+          };
+        } else {
+          // Falls benötigte Werte fehlen, setze deltaH auf null
+          updatedPunkte[i] = {
+            ...updatedPunkte[i],
+            deltaH: null
+          };
+        }
+      } else {
+        // Falls kein Wechselpunkt gefunden wurde, verwende die normale Berechnung
+        const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
+        updatedPunkte[i] = {
+          ...updatedPunkte[i],
+          deltaH
+        };
+      }
+    } else {
+      // Normal für alle anderen Punkte
+      const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
+      updatedPunkte[i] = {
+        ...updatedPunkte[i],
+        deltaH
+      };
+    }
   }
   
   // Berechne absolute Höhen für Wechselpunkte und MB-Punkte
@@ -823,6 +894,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
 
   return (
     <>
+      <GlobalStyles />
       <Box component="div">
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
@@ -851,12 +923,12 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                     <TextField
                       fullWidth
                       label="Absolute Höhe [m]"
-                  type="number" 
+                type="number" 
                       InputProps={{
                         inputProps: { step: 0.001 }
                       }}
-                  value={startPunkt.absoluteHoehe || ''} 
-                  onChange={(e) => handleStartPunktChange('absoluteHoehe', e.target.value)}
+                value={startPunkt.absoluteHoehe || ''} 
+                onChange={(e) => handleStartPunktChange('absoluteHoehe', e.target.value)}
                       variant="outlined"
                       size="small"
                     />
@@ -892,12 +964,12 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                     <TextField
                       fullWidth
                       label="Absolute Höhe [m]"
-                  type="number" 
+                type="number" 
                       InputProps={{
                         inputProps: { step: 0.001 }
                       }}
-                  value={endPunkt.absoluteHoehe || ''} 
-                  onChange={(e) => handleEndPunktChange('absoluteHoehe', e.target.value)}
+                value={endPunkt.absoluteHoehe || ''} 
+                onChange={(e) => handleEndPunktChange('absoluteHoehe', e.target.value)}
                       variant="outlined"
                       size="small"
                     />
@@ -946,15 +1018,22 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
               >
                 <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell style={{ width: '32px', padding: '4px' }}></TableCell>
-                      <TableCell style={{ width: '70px', padding: '4px' }}>Punkt Nr.</TableCell>
-                      <TableCell style={{ width: '140px', padding: '4px' }}>Rückblick [r]</TableCell>
-                      <TableCell style={{ width: '120px', padding: '4px' }}>Mittelblick [m]</TableCell>
-                      <TableCell style={{ width: '120px', padding: '4px' }}>Vorblick [v]</TableCell>
-                      <TableCell style={{ width: '105px', padding: '4px' }}>Δh</TableCell>
-                      <TableCell style={{ width: '120px', padding: '4px' }}>Absolute Höhe h</TableCell>
-                      <TableCell style={{ width: '160px', padding: '4px' }}>Bemerkung</TableCell>
+                    <TableRow sx={{ 
+                      backgroundColor: theme => theme.palette.primary.light,
+                      '& th': { 
+                        color: theme => theme.palette.primary.main,
+                        fontWeight: 'bold',
+                        textAlign: 'center'
+                      }
+                    }}>
+                      <TableCell style={{ width: '50px', padding: '4px' }}></TableCell>
+                      <TableCell style={{ width: '50px', padding: '4px' }}>Nr.</TableCell>
+                      <TableCell style={{ width: '180px', padding: '4px' }}>Rückblick r [m]</TableCell>
+                      <TableCell style={{ width: '120px', padding: '4px' }}>Mittelblick m [m]</TableCell>
+                      <TableCell style={{ width: '120px', padding: '4px' }}>Vorblick v [m]</TableCell>
+                      <TableCell style={{ width: '140px', padding: '4px' }}>Δh [m]</TableCell>
+                      <TableCell style={{ width: '140px', padding: '4px' }}>Höhe H [m]</TableCell>
+                      <TableCell style={{ width: '180px', padding: '4px' }}>Bemerkung</TableCell>
                       <TableCell style={{ width: '50px', padding: '4px' }}></TableCell>
                     </TableRow>
                   </TableHead>
@@ -984,7 +1063,11 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                                   </Box>
                                 )}
                               </TableCell>
-                              <TableCell>
+                              <TableCell
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                   {punkt.punktNr}
                                 </Typography>
@@ -1026,7 +1109,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                                           size="small" 
                                       onClick={() => addPunktKorrektur(index, true)}
                                       title="Korrektur erhöhen (+1 mm)"
-                                          sx={{ p: 0.2 }}
+                                          sx={{ p: 0.2, height: 15, width: 15, marginTop: 0.5 }}
                                         >
                                           <Typography variant="caption">+</Typography>
                                         </IconButton>
@@ -1034,7 +1117,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                                           size="small" 
                                       onClick={() => addPunktKorrektur(index, false)}
                                       title="Korrektur verringern (-1 mm)"
-                                          sx={{ p: 0.2 }}
+                                          sx={{ p: 0.2, height: 15, width: 15, marginTop: 0.5 }}
                                         >
                                           <Typography variant="caption">-</Typography>
                                         </IconButton>
@@ -1099,8 +1182,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                                     variant="body2" 
                                     sx={{ 
                                       fontFamily: 'monospace', 
-                                      fontWeight: 500,
-                                      color: displayPunkt.deltaH < 0 ? 'error.main' : 'inherit'
+                                      fontWeight: 500
                                     }}
                                   >
                                     {formatNumber(displayPunkt.deltaH)}
@@ -1168,7 +1250,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                           <DragHandle />
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell align={newRow.punktNr === 'W' || newRow.punktNr === 'MB' ? 'right' : 'left'}>
                         <Select
                           fullWidth
                   value={newRow.punktNr}
@@ -1181,8 +1263,8 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                             '.MuiInputBase-input': { padding: '2px 4px', fontSize: '0.75rem' }
                           }}
                         >
-                          <MenuItem value="W">Wechselpunkt (W)</MenuItem>
-                          <MenuItem value="M">Mittelblick (M)</MenuItem>
+                          <MenuItem value="W">W</MenuItem>
+                          <MenuItem value="M">M</MenuItem>
                         </Select>
                       </TableCell>
                       <TableCell align={newRow.punktNr === 'W' ? 'right' : 'left'}>
@@ -1302,7 +1384,11 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                           
                           return (<>
                             <TableCell></TableCell>
-                            <TableCell>
+                            <TableCell
+                              align={
+                                punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                              }
+                            >
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                 {lastPunkt.punktNr}
                               </Typography>
@@ -1365,7 +1451,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                               )}
                             </TableCell>
                             <TableCell align="right">
-                              {lastDisplayPunkt.deltaH !== null ? (
+                              {lastDisplayPunkt.deltaH !== null && lastDisplayPunkt.deltaH !== undefined ? (
                                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                                   {formatNumber(lastDisplayPunkt.deltaH)}
                                 </Typography>
@@ -1374,7 +1460,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                               )}
                             </TableCell>
                             <TableCell align="right">
-                              {endPunkt.absoluteHoehe !== null ? (
+                              {endPunkt.absoluteHoehe !== null && endPunkt.absoluteHoehe !== undefined ? (
                                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                                   {formatNumber(endPunkt.absoluteHoehe)}
                                 </Typography>
@@ -1402,7 +1488,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                     )}
                   </TableBody>
                   <TableFooter>
-                    <TableRow>
+                    <TableRow sx={{ backgroundColor: theme => theme.palette.grey[100] }}>
                       <TableCell></TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
@@ -1411,18 +1497,18 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                  Σr = {calculateSummeRueckblick().toFixed(3)}
+                          Σr = {calculateSummeRueckblick().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell></TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                  Σv = {calculateSummeVorblick().toFixed(3)}
+                          Σv = {calculateSummeVorblick().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                  ΣΔh = {calculateSummeDeltaH().toFixed(3)}
+                          ΣΔh = {calculateSummeDeltaH().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell></TableCell>
