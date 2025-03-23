@@ -756,11 +756,14 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             <div className="punkt-config">
               <div className="input-group">
                 <label>Punkt Nr.:</label>
-                <input 
-                  type="text" 
-                  value={startPunkt.punktNr} 
-                  onChange={(e) => handleStartPunktChange('punktNr', e.target.value)}
-                />
+                <div className="mb-input-group">
+                  <span className="mb-prefix">MB</span>
+                  <input 
+                    type="text" 
+                    value={startPunkt.punktNr.replace('MB', '')} 
+                    onChange={(e) => handleStartPunktChange('punktNr', 'MB' + e.target.value)}
+                  />
+                </div>
               </div>
               <div className="input-group">
                 <label>Absolute Höhe [m]:</label>
@@ -779,11 +782,14 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             <div className="punkt-config">
               <div className="input-group">
                 <label>Punkt Nr.:</label>
-                <input 
-                  type="text" 
-                  value={endPunkt.punktNr} 
-                  onChange={(e) => handleEndPunktChange('punktNr', e.target.value)}
-                />
+                <div className="mb-input-group">
+                  <span className="mb-prefix">MB</span>
+                  <input 
+                    type="text" 
+                    value={endPunkt.punktNr.replace('MB', '')} 
+                    onChange={(e) => handleEndPunktChange('punktNr', 'MB' + e.target.value)}
+                  />
+                </div>
               </div>
               <div className="input-group">
                 <label>Absolute Höhe [m]:</label>
@@ -972,7 +978,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             .nivellement-table table col.col-delta-h { width: 105px; }
             .nivellement-table table col.col-abs-hoehe { width: 120px; }
             .nivellement-table table col.col-bemerkung { width: 160px; }
-            .nivellement-table table col.col-aktionen { width: 90px; }
+            .nivellement-table table col.col-aktionen { width: 50px; }
             
             /* Eingabefelder und Selects formatieren */
             .nivellement-table table input,
@@ -1010,7 +1016,15 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               font-size: 14px;
               letter-spacing: 0.5px;
               display: block;
+            }
+            
+            .row-type-MB td:nth-child(6) span, .row-type-MB td:nth-child(7) span,
+            .row-type-W td:nth-child(6) span, .row-type-W td:nth-child(7) span {
               text-align: right;
+            }
+            
+            .row-type-M td:nth-child(6) span, .row-type-M td:nth-child(7) span {
+              text-align: left;
             }
             
             /* Punkt-Typ Flex-Container */
@@ -1027,29 +1041,33 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             }
             
             .punkt-nummer {
-              margin-left: 4px;
+              margin-left: 15px;
               white-space: nowrap;
             }
             
             /* Button-Styling verbessern */
             .delete-button, .add-button {
-              width: 100%;
-              padding: 4px 8px;
+              width: 30px;
+              height: 30px;
+              padding: 4px;
               cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border-radius: 4px;
+              margin: 0 auto;
             }
             
             .delete-button {
               background-color: #e74c3c;
               color: white;
               border: none;
-              border-radius: 4px;
             }
             
             .add-button {
               background-color: #27ae60;
               color: white;
               border: none;
-              border-radius: 4px;
             }
             
             /* Spezifische Styling für disabled inputs */
@@ -1057,6 +1075,13 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               background-color: #f9f9f9;
               color: #999;
               border-color: #ddd;
+              display: none;
+            }
+            
+            /* Style für leere Zellen */
+            .empty-cell {
+              text-align: center;
+              color: #aaa;
             }
             
             /* Drag-Handle Styling */
@@ -1230,6 +1255,28 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             .korrektur-status-value.negativ {
               color: #c62828;
             }
+            
+            /* MB Präfix und Eingabe Styling */
+            .mb-input-group {
+              display: flex;
+              flex: 1;
+              align-items: center;
+            }
+            
+            .mb-prefix {
+              background-color: #f2f2f2;
+              padding: 1.5px 8px;
+              border: 1px solid #ccc;
+              border-right: none;
+              border-radius: 3px 0 0 3px;
+              font-weight: bold;
+              color: #666;
+            }
+            
+            .mb-input-group input {
+              flex: 1;
+              border-radius: 0 3px 3px 0;
+            }
           `}
         </style>
         <table>
@@ -1254,7 +1301,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               <th>Δh</th>
               <th>Absolute Höhe h</th>
               <th>Bemerkung</th>
-              <th>Aktionen</th>
+              <th></th>
             </tr>
           </thead>
         </table>
@@ -1329,14 +1376,16 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <input
-                                type="number"
-                                step="0.001"
-                                value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
-                                onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
-                                disabled={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1)}
-                                className={!isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? 'disabled-input' : ''}
-                              />
+                              {isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? (
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
+                                  onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
+                                />
+                              ) : (
+                                <span className="empty-cell">-</span>
+                              )}
                               
                               {(isWechselpunkt || (index === 0 && punkt.punktNr.startsWith('MB'))) && isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) && (
                                 <div className="korrektur-container">
@@ -1366,24 +1415,28 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                             </div>
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={punkt.mittelblick !== null ? punkt.mittelblick : ''}
-                              onChange={(e) => handleInputChange(index, 'mittelblick', e.target.value)}
-                              disabled={!isFieldEditable(punkt.punktNr, 'mittelblick', index, punkte.length - 1)}
-                              className={!isFieldEditable(punkt.punktNr, 'mittelblick', index, punkte.length - 1) ? 'disabled-input' : ''}
-                            />
+                            {isFieldEditable(punkt.punktNr, 'mittelblick', index, punkte.length - 1) ? (
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={punkt.mittelblick !== null ? punkt.mittelblick : ''}
+                                onChange={(e) => handleInputChange(index, 'mittelblick', e.target.value)}
+                              />
+                            ) : (
+                              <span className="empty-cell">-</span>
+                            )}
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={punkt.vorblick !== null ? punkt.vorblick : ''}
-                              onChange={(e) => handleInputChange(index, 'vorblick', e.target.value)}
-                              disabled={!isFieldEditable(punkt.punktNr, 'vorblick', index, punkte.length - 1)}
-                              className={!isFieldEditable(punkt.punktNr, 'vorblick', index, punkte.length - 1) ? 'disabled-input' : ''}
-                            />
+                            {isFieldEditable(punkt.punktNr, 'vorblick', index, punkte.length - 1) ? (
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={punkt.vorblick !== null ? punkt.vorblick : ''}
+                                onChange={(e) => handleInputChange(index, 'vorblick', e.target.value)}
+                              />
+                            ) : (
+                              <span className="empty-cell">-</span>
+                            )}
                           </td>
                           <td>
                             <span>{displayPunkt.deltaH !== null ? displayPunkt.deltaH.toFixed(3) : '-'}</span>
@@ -1407,8 +1460,12 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                               <button
                                 onClick={() => removeRow(index)}
                                 className="delete-button"
+                                title="Löschen"
                               >
-                                Löschen
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M3 6H5H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
                               </button>
                             ) : null}
                           </td>
@@ -1432,43 +1489,49 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                     </select>
                   </td>
                   <td>
-                    <input
-                      ref={rueckblickRef}
-                      type="number"
-                      step="0.001"
-                      value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
-                      onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
-                      disabled={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1)}
-                      className={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? 'disabled-input' : ''}
-                      placeholder="Rückblick"
-                      onKeyDown={handleKeyDown}
-                    />
+                    {isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? (
+                      <input
+                        ref={rueckblickRef}
+                        type="number"
+                        step="0.001"
+                        value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
+                        onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
+                        placeholder="Rückblick"
+                        onKeyDown={handleKeyDown}
+                      />
+                    ) : (
+                      <span className="empty-cell">-</span>
+                    )}
                   </td>
                   <td>
-                    <input
-                      ref={mittelblickRef}
-                      type="number"
-                      step="0.001"
-                      value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
-                      onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
-                      disabled={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1)}
-                      className={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? 'disabled-input' : ''}
-                      placeholder="Mittelblick"
-                      onKeyDown={handleKeyDown}
-                    />
+                    {isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? (
+                      <input
+                        ref={mittelblickRef}
+                        type="number"
+                        step="0.001"
+                        value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
+                        onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
+                        placeholder="Mittelblick"
+                        onKeyDown={handleKeyDown}
+                      />
+                    ) : (
+                      <span className="empty-cell">-</span>
+                    )}
                   </td>
                   <td>
-                    <input
-                      ref={vorblickRef}
-                      type="number"
-                      step="0.001"
-                      value={newRow.vorblick !== null ? newRow.vorblick : ''}
-                      onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
-                      disabled={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1)}
-                      className={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? 'disabled-input' : ''}
-                      placeholder="Vorblick"
-                      onKeyDown={handleKeyDown}
-                    />
+                    {isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? (
+                      <input
+                        ref={vorblickRef}
+                        type="number"
+                        step="0.001"
+                        value={newRow.vorblick !== null ? newRow.vorblick : ''}
+                        onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
+                        placeholder="Vorblick"
+                        onKeyDown={handleKeyDown}
+                      />
+                    ) : (
+                      <span className="empty-cell">-</span>
+                    )}
                   </td>
                   <td>
                     <span>-</span>
@@ -1490,8 +1553,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                       onClick={addNewRow} 
                       disabled={!newRow.punktNr || (!newRow.punktNr.startsWith('W') && !newRow.punktNr.startsWith('M'))}
                       className="add-button"
+                      title="Hinzufügen"
                     >
-                      Hinzufügen
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5V19M5 12H19" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </button>
                   </td>
                 </tr>
@@ -1519,34 +1585,40 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                           />
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={lastPunkt.rueckblick !== null ? lastPunkt.rueckblick : ''}
-                            onChange={(e) => handleInputChange(punkte.length - 1, 'rueckblick', e.target.value)}
-                            disabled={!isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1)}
-                            className={!isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
-                          />
+                          {isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1) ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={lastPunkt.rueckblick !== null ? lastPunkt.rueckblick : ''}
+                              onChange={(e) => handleInputChange(punkte.length - 1, 'rueckblick', e.target.value)}
+                            />
+                          ) : (
+                            <span className="empty-cell">-</span>
+                          )}
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={lastPunkt.mittelblick !== null ? lastPunkt.mittelblick : ''}
-                            onChange={(e) => handleInputChange(punkte.length - 1, 'mittelblick', e.target.value)}
-                            disabled={!isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1)}
-                            className={!isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
-                          />
+                          {isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1) ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={lastPunkt.mittelblick !== null ? lastPunkt.mittelblick : ''}
+                              onChange={(e) => handleInputChange(punkte.length - 1, 'mittelblick', e.target.value)}
+                            />
+                          ) : (
+                            <span className="empty-cell">-</span>
+                          )}
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={lastPunkt.vorblick !== null ? lastPunkt.vorblick : ''}
-                            onChange={(e) => handleInputChange(punkte.length - 1, 'vorblick', e.target.value)}
-                            disabled={!isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1)}
-                            className={!isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
-                          />
+                          {isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1) ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={lastPunkt.vorblick !== null ? lastPunkt.vorblick : ''}
+                              onChange={(e) => handleInputChange(punkte.length - 1, 'vorblick', e.target.value)}
+                            />
+                          ) : (
+                            <span className="empty-cell">-</span>
+                          )}
                         </td>
                         <td>
                           <span>{lastDisplayPunkt.deltaH !== null ? lastDisplayPunkt.deltaH.toFixed(3) : '-'}</span>
@@ -1585,7 +1657,7 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               <col className="col-delta-h" style={{ width: '105px' }} />
               <col className="col-abs-hoehe" style={{ width: '120px' }} />
               <col className="col-bemerkung" style={{ width: '160px' }} />
-              <col className="col-aktionen" style={{ width: '90px' }} />
+              <col className="col-aktionen" style={{ width: '50px' }} />
             </colgroup>
             <tbody>
               <tr className="summary-row">
