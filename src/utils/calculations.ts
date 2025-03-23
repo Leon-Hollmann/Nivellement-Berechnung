@@ -13,7 +13,7 @@ const getPunktTyp = (punktNr: string): 'MB' | 'W' | 'M' | 'unbekannt' => {
 export const calculateDeltaH = (
   punkte: NivellementPunkt[],
   rowIndex: number,
-  korrekturen: Record<number, number> = {}
+  korrekturen: Record<string | number, number> = {}
 ): number | null => {
   const currentPunkt = punkte[rowIndex];
   
@@ -38,10 +38,18 @@ export const calculateDeltaH = (
   }
 
   // Hilfsfunktion, um Korrektur auf Rückblick anzuwenden (nur für deltaH-Berechnung)
-  const applyRueckblickKorrektur = (rueckblick: number | null, index: number): number => {
+  const applyRueckblickKorrektur = (rueckblick: number | null, punkt: NivellementPunkt, index: number): number => {
     if (rueckblick === null) return 0;
+    
+    // Prüfe nach Korrektur zuerst mit punktNr, dann mit Index
+    let korrektur = 0;
+    if (punkt.punktNr && typeof punkt.punktNr === 'string' && korrekturen[punkt.punktNr] !== undefined) {
+      korrektur = korrekturen[punkt.punktNr];
+    } else if (korrekturen[index] !== undefined) {
+      korrektur = korrekturen[index];
+    }
+    
     // Korrektur in mm zu m umrechnen und zum Rückblick addieren
-    const korrektur = korrekturen[index] || 0;
     const korrekturInMeter = korrektur / 1000;
     return rueckblick + korrekturInMeter;
   };
@@ -57,7 +65,7 @@ export const calculateDeltaH = (
     if (prevRow && currentPunkt.vorblick !== null) {
       const prevPunktTyp = getPunktTyp(prevRow.punktNr);
       if (prevPunktTyp === 'W' || prevPunktTyp === 'MB') {
-        const korrigierterRueckblick = applyRueckblickKorrektur(prevRow.rueckblick, rowIndex - 1);
+        const korrigierterRueckblick = applyRueckblickKorrektur(prevRow.rueckblick, prevRow, rowIndex - 1);
         return prevRow.rueckblick !== null ? korrigierterRueckblick - currentPunkt.vorblick : null;
       } else if (prevPunktTyp === 'M' && prevRow.mittelblick !== null) {
         return prevRow.mittelblick - currentPunkt.vorblick;
@@ -69,7 +77,7 @@ export const calculateDeltaH = (
   if (currentPunktTyp === 'W') {
     // Wechselpunkt: Delta H ist Rückblick des vorherigen Punkts - Vorblick des aktuellen
     if (prevPunkt && prevPunkt.rueckblick !== null && currentPunkt.vorblick !== null) {
-      const korrigierterRueckblick = applyRueckblickKorrektur(prevPunkt.rueckblick, prevPunktIndex);
+      const korrigierterRueckblick = applyRueckblickKorrektur(prevPunkt.rueckblick, prevPunkt, prevPunktIndex);
       return korrigierterRueckblick - currentPunkt.vorblick;
     }
     return null;
@@ -84,7 +92,7 @@ export const calculateDeltaH = (
     if (directPrevPunktTyp === 'W' || directPrevPunktTyp === 'MB') {
       // deltaH = r_vorheriger - m_aktueller
       if (directPrevPunkt && directPrevPunkt.rueckblick !== null && currentPunkt.mittelblick !== null) {
-        const korrigierterRueckblick = applyRueckblickKorrektur(directPrevPunkt.rueckblick, rowIndex - 1);
+        const korrigierterRueckblick = applyRueckblickKorrektur(directPrevPunkt.rueckblick, directPrevPunkt, rowIndex - 1);
         return korrigierterRueckblick - currentPunkt.mittelblick;
       }
     }
@@ -218,7 +226,7 @@ const prüfeMittelblicke = (punkte: NivellementPunkt[]): boolean => {
 export const updateNivellementPunkte = (
   punkte: NivellementPunkt[],
   startHoehe: number,
-  korrekturen: Record<number, number> = {}
+  korrekturen: Record<string | number, number> = {}
 ): NivellementPunkt[] => {
   const updatedPunkte = [...punkte];
   

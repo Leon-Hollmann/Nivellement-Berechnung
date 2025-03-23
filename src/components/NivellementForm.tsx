@@ -22,7 +22,7 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
   const [streckeLaenge, setStreckeLaenge] = useState<number>(initialNivellement?.streckeLaenge || 1);
   
   // State für Korrekturen
-  const [korrekturen, setKorrekturen] = useState<Record<number, number>>(initialNivellement?.korrekturen || {});
+  const [korrekturen, setKorrekturen] = useState<Record<string | number, number>>(initialNivellement?.korrekturen || {});
   
   // Initialisiere Punkte mit MB-Start und MB-Ende
   const [punkte, setPunkte] = useState<NivellementPunkt[]>(
@@ -105,7 +105,7 @@ const NivellementForm: React.FC<NivellementFormProps> = ({ initialNivellement, o
     setStreckeLaenge(newStreckeLaenge);
   };
 
-  const handleKorrekturenChange = (newKorrekturen: Record<number, number>) => {
+  const handleKorrekturenChange = (newKorrekturen: Record<string | number, number>) => {
     setKorrekturen(newKorrekturen);
   };
   

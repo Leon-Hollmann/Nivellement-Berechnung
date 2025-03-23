@@ -1,27 +1,97 @@
-import { useState, useEffect, useRef } from 'react';
-import { NivellementPunkt } from '../models/types';
-import {
-  DndContext,
-  closestCenter,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent
+import React, { useState, useEffect, useRef } from 'react';
+import { DndContext, DragEndEvent, 
+  KeyboardSensor, PointerSensor, closestCenter,
+  useSensor, useSensors
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
+import { 
+  Box, 
+  TextField, 
+  Button, 
+  IconButton, 
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  styled,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  TableFooter
+} from '@mui/material';
+import { 
+  Delete as DeleteIcon, 
+  Add as AddIcon
+} from '@mui/icons-material';
+import { NivellementPunkt } from '../models/types';
 import { calculateDeltaH, calculateAbsoluteHoehe } from '../utils/calculations';
+
+// Hilfsfunktion zum Formatieren von Zahlen
+const formatNumber = (value: number): string => {
+  return value.toFixed(3);
+};
+
+const StyledTableRow = styled(TableRow, {
+  shouldForwardProp: (prop) => prop !== 'punktType' && prop !== 'isDragging'
+})<{ punktType?: string; isDragging?: boolean }>(({ theme, punktType, isDragging }) => ({
+  ...(punktType === 'MB' && {
+    '&:first-of-type td': {
+      backgroundColor: '#f0f7ff',
+      borderTop: `2px solid ${theme.palette.primary.main}`,
+      borderBottom: `2px solid ${theme.palette.primary.main}`
+    },
+    '&:last-of-type td': {
+      backgroundColor: '#f7f0ff',
+      borderTop: `2px solid ${theme.palette.secondary.main}`,
+      borderBottom: `2px solid ${theme.palette.secondary.main}`
+    }
+  }),
+  opacity: isDragging ? 0.5 : 1
+}));
+
+const EmptyCell = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  color: theme.palette.text.secondary,
+  height: '100%',
+  padding: theme.spacing(1),
+}));
+
+const SetupCard = styled(Card)(({ theme }) => ({
+  marginBottom: theme.spacing(3)
+}));
+
+const MBInputGroup = styled(Box)({
+  display: 'flex',
+  flex: 1,
+  alignItems: 'center'
+});
+
+const MBPrefix = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.grey[200],
+  padding: '8px',
+  border: `1px solid ${theme.palette.grey[400]}`,
+  borderRight: 'none',
+  borderRadius: '4px 0 0 4px',
+  fontWeight: 'bold',
+  color: theme.palette.text.secondary
+}));
 
 // Drag-Handle-Komponente
 const DragHandle = () => (
   <div className="drag-handle">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M8 6H16M8 12H16M8 18H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 6H16M8 12H16M8 18H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   </div>
 );
@@ -58,14 +128,14 @@ function SortableTableRow({ punkt, index, children, isStatic }: SortableTableRow
   const punktType = getPunktType(punkt.punktNr);
   
   return (
-    <tr
+    <StyledTableRow 
       ref={setNodeRef}
       style={style}
-      className={`${isDragging ? 'dragging' : ''} row-type-${punktType}`}
-      data-punkt-type={punktType}
+      punktType={punktType}
+      isDragging={isDragging}
     >
       {children(isStatic ? null : { ...attributes, ...listeners })}
-    </tr>
+    </StyledTableRow>
   );
 }
 
@@ -77,19 +147,19 @@ const getPunktType = (punktNr: string) => {
   return '';
 };
 
-interface NivellementTableProps {
+interface NivellementTableComponentProps {
   punkte: NivellementPunkt[];
   onChange: (punkte: NivellementPunkt[]) => void;
-  streckeLaenge?: number;
-  onStreckeLaengeChange?: (streckeLaenge: number) => void;
-  korrekturen?: Record<number, number>;
-  onKorrekturenChange?: (korrekturen: Record<number, number>) => void;
+  streckeLaenge: number;
+  onStreckeLaengeChange: (streckeLaenge: number) => void;
+  korrekturen: Record<string | number, number>;
+  onKorrekturenChange?: (korrekturen: Record<string | number, number>) => void;
 }
 
 // Hilfsfunktion zum Anzuwenden von Korrekturen auf deltaH
 const applyKorrekturenToDeltaH = (
   punkte: NivellementPunkt[], 
-  korrekturen: Record<number, number>
+  korrekturen: Record<string, number>
 ): NivellementPunkt[] => {
   if (Object.keys(korrekturen).length === 0) return punkte;
   
@@ -97,6 +167,7 @@ const applyKorrekturenToDeltaH = (
   
   // Berechne deltaH für alle Punkte mit Korrekturen
   for (let i = 1; i < updatedPunkte.length; i++) {
+    // Verwende die Funktion aus der Utility, die Korrekturen berücksichtigt
     const deltaH = calculateDeltaH(updatedPunkte, i, korrekturen);
     updatedPunkte[i] = {
       ...updatedPunkte[i],
@@ -133,44 +204,6 @@ const applyKorrekturenToDeltaH = (
     }
   }
   
-  // Speziell für den Endpunkt (letzter MB-Punkt)
-  // Finde den letzten Wechselpunkt vor dem Endpunkt
-  let lastWIndex = -1;
-  for (let i = updatedPunkte.length - 2; i >= 0; i--) {
-    if (updatedPunkte[i].punktNr.startsWith('W')) {
-      lastWIndex = i;
-      break;
-    }
-  }
-  
-  // Wenn ein Wechselpunkt gefunden wurde und der Endpunkt ein MB-Punkt ist
-  if (lastWIndex !== -1 && updatedPunkte[updatedPunkte.length - 1].punktNr.startsWith('MB')) {
-    const endIndex = updatedPunkte.length - 1;
-    const lastWPunkt = updatedPunkte[lastWIndex];
-    const endPunkt = updatedPunkte[endIndex];
-    
-    // Berechne deltaH für den Endpunkt basierend auf dem letzten Wechselpunkt
-    if (lastWPunkt.rueckblick !== null && endPunkt.vorblick !== null) {
-      // Hilfsfunktion, um Korrektur auf Rückblick anzuwenden
-      const applyRueckblickKorrektur = (rueckblick: number | null, index: number): number => {
-        if (rueckblick === null) return 0;
-        // Korrektur in mm zu m umrechnen und zum Rückblick addieren
-        const korrektur = korrekturen[index] || 0;
-        const korrekturInMeter = korrektur / 1000;
-        return rueckblick + korrekturInMeter;
-      };
-      
-      const korrigierterRueckblick = applyRueckblickKorrektur(lastWPunkt.rueckblick, lastWIndex);
-      const deltaH = korrigierterRueckblick - endPunkt.vorblick;
-      
-      // Aktualisiere den deltaH-Wert des Endpunkts
-      updatedPunkte[endIndex] = {
-        ...endPunkt,
-        deltaH
-      };
-    }
-  }
-  
   // Berechne absolute Höhen für Mittelblicke
   for (let i = 1; i < updatedPunkte.length; i++) {
     const punktTyp = getPunktType(updatedPunkte[i].punktNr);
@@ -190,7 +223,7 @@ const applyKorrekturenToDeltaH = (
   return updatedPunkte;
 };
 
-const NivellementTable: React.FC<NivellementTableProps> = ({ 
+const NivellementTable: React.FC<NivellementTableComponentProps> = ({ 
   punkte, 
   onChange, 
   streckeLaenge: propStreckeLaenge, 
@@ -241,17 +274,12 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
 
   // Sensoren für Drag-and-Drop
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
     }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 250,
-        tolerance: 8,
-      },
-    })
+    useSensor(KeyboardSensor)
   );
 
   // Refs für die Eingabefelder
@@ -390,37 +418,59 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
     return true;
   };
 
-  // Berechnungsfunktionen für die Zusammenfassung
+  /**
+   * Berechnet die unkorrigierte Summe aller Rückblicke auf W- und MB-Punkte
+   * Diese Summe wird für die Fehlerverteilung verwendet.
+   */
   const calculateSummeRueckblick = (): number => {
-    // Nur W-Punkte und MB-Punkte in die Berechnung einbeziehen
     return punkte
-      .filter(punkt => punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB'))
-      .reduce((sum, punkt) => sum + (punkt.rueckblick || 0), 0);
+      .filter((p) => p.punktNr.startsWith('W') || p.punktNr.startsWith('MB'))
+      .reduce((sum, p) => sum + (p.rueckblick || 0), 0);
   };
 
+  /**
+   * Berechnet die unkorrigierte Summe aller Vorblicke
+   */
   const calculateSummeVorblick = (): number => {
-    // Nur W-Punkte und MB-Punkte in die Berechnung einbeziehen
     return punkte
-      .filter(punkt => punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB'))
-      .reduce((sum, punkt) => sum + (punkt.vorblick || 0), 0);
+      .filter((p) => p.punktNr.startsWith('W') || p.punktNr.startsWith('MB'))
+      .reduce((sum, p) => sum + (p.vorblick || 0), 0);
   };
 
+  /**
+   * Berechnet die unkorrigierte Summe aller deltaH-Werte für W- und MB-Punkte
+   */
   const calculateSummeDeltaH = (): number => {
-    // Nur Wechselpunkte und MB-Punkte in die Berechnung einbeziehen
-    return displayPunkte.filter(punkt => 
-      punkt.punktNr.startsWith('W') || punkt.punktNr.startsWith('MB')
-    ).reduce((sum, punkt) => sum + (punkt.deltaH || 0), 0);
+    return displayPunkte
+      .filter((p) => p.punktNr.startsWith('W') || p.punktNr.startsWith('MB'))
+      .reduce((sum, p) => sum + (p.deltaH || 0), 0);
   };
 
-  const calculateDeltaHIst = (): number => {
-    return calculateSummeRueckblick() - calculateSummeVorblick();
-  };
-
+  /**
+   * Berechnet den Sollwert für deltaH (H_End - H_Start)
+   */
   const calculateDeltaHSoll = (): number => {
-    if (punkte.length < 2) return 0;
-    const startHoehe = punkte[0].absoluteHoehe || 0;
-    const endHoehe = punkte[punkte.length - 1].absoluteHoehe || 0;
-    return endHoehe - startHoehe;
+    // Finde den Höhenunterschied zwischen Start- und Endpunkt
+    const startPunktObj = punkte.find((p) => p.punktNr === startPunkt.punktNr);
+    const endPunktObj = punkte.find((p) => p.punktNr === endPunkt.punktNr);
+    
+    if (!startPunktObj || !endPunktObj || startPunktObj.absoluteHoehe === undefined || endPunktObj.absoluteHoehe === undefined) {
+      return 0;
+    }
+    
+    return (endPunktObj.absoluteHoehe || 0) - (startPunktObj.absoluteHoehe || 0);
+  };
+
+  /**
+   * Berechnet den Istwert für deltaH (Σr - Σv)
+   * Wichtig: Verwendet die unkorrigierten Werte für die Fehlerberechnung
+   */
+  const calculateDeltaHIst = (): number => {
+    // Für den Istwert nehmen wir die unkorrigierten Werte
+    const summeRueckblick = calculateSummeRueckblick();
+    const summeVorblick = calculateSummeVorblick();
+    
+    return summeRueckblick - summeVorblick;
   };
 
   const calculateFehlerV = (): number => {
@@ -679,16 +729,22 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
   };
 
   // State für Fehlerverteilung
-  const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<number, number>>(propKorrekturen || {});
+  const [fehlerKorrekturen, setFehlerKorrekturen] = useState<Record<string, number>>(propKorrekturen || {});
 
   // Füge Korrektur zu einem einzelnen Wechselpunkt hinzu
   const addPunktKorrektur = (index: number, positiv: boolean) => {
     // Standardwert für Korrektur in mm (1 mm statt 0.1 mm)
     const korrekturWert = positiv ? 1 : -1;
     
+    // Finde den Punkt anhand des Index
+    const punkt = punkte[index];
+    if (!punkt) return;
+    
+    const punktNr = punkt.punktNr;
+    
     const updatedKorrekturen = {
       ...fehlerKorrekturen,
-      [index]: (fehlerKorrekturen[index] || 0) + korrekturWert
+      [punktNr]: (fehlerKorrekturen[punktNr] || 0) + korrekturWert
     };
     
     setFehlerKorrekturen(updatedKorrekturen);
@@ -727,10 +783,28 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
 
   // Aktualisiere den lokalen State, wenn sich die Props ändern
   useEffect(() => {
-    if (propKorrekturen && JSON.stringify(propKorrekturen) !== JSON.stringify(fehlerKorrekturen)) {
-      setFehlerKorrekturen(propKorrekturen);
+    if (propKorrekturen) {
+      // Konvertiere numerische Indizes zu punktNr, falls nötig
+      const konvertierteKorrekturen: Record<string, number> = {};
+      Object.entries(propKorrekturen).forEach(([key, value]) => {
+        // Prüfe, ob der Key ein numerischer Index ist
+        if (!isNaN(Number(key))) {
+          const index = Number(key);
+          if (index >= 0 && index < punkte.length) {
+            konvertierteKorrekturen[punkte[index].punktNr] = value;
+          }
+        } else {
+          // Falls bereits ein String-Key verwendet wird, übernehme ihn direkt
+          konvertierteKorrekturen[key] = value;
+        }
+      });
+      setFehlerKorrekturen(konvertierteKorrekturen);
+      
+      // Aktualisiere displayPunkte mit den konvertierten Korrekturen
+      const updatedDisplayPunkte = applyKorrekturenToDeltaH(punkte, konvertierteKorrekturen);
+      setDisplayPunkte(updatedDisplayPunkte);
     }
-  }, [propKorrekturen]);
+  }, [propKorrekturen, punkte]);
 
   // State für Mittelblick-Proben Sichtbarkeit
   const [mittelblickProbenVisible, setMittelblickProbenVisible] = useState<boolean>(false);
@@ -749,564 +823,118 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
 
   return (
     <>
-      <div className="nivellement-setup">
-        <div className="setup-container">
-          <div className="start-punkt-container">
-            <h4>Startpunkt</h4>
-            <div className="punkt-config">
-              <div className="input-group">
-                <label>Punkt Nr.:</label>
-                <div className="mb-input-group">
-                  <span className="mb-prefix">MB</span>
-                  <input 
-                    type="text" 
-                    value={startPunkt.punktNr.replace('MB', '')} 
-                    onChange={(e) => handleStartPunktChange('punktNr', 'MB' + e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="input-group">
-                <label>Absolute Höhe [m]:</label>
-                <input 
+      <Box component="div">
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <SetupCard>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Startpunkt</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth>
+                      <InputLabel shrink>Punkt Nr.</InputLabel>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MBInputGroup>
+                          <MBPrefix>MB</MBPrefix>
+                          <TextField
+                            fullWidth
+                            value={startPunkt.punktNr.replace('MB', '')}
+                            onChange={(e) => handleStartPunktChange('punktNr', 'MB' + e.target.value)}
+                            variant="outlined"
+                            size="small"
+                          />
+                        </MBInputGroup>
+                      </Box>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Absolute Höhe [m]"
                   type="number" 
-                  step="0.001" 
+                      InputProps={{
+                        inputProps: { step: 0.001 }
+                      }}
                   value={startPunkt.absoluteHoehe || ''} 
                   onChange={(e) => handleStartPunktChange('absoluteHoehe', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
+                      variant="outlined"
+                      size="small"
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </SetupCard>
+          </Grid>
           
-          <div className="end-punkt-container">
-            <h4>Endpunkt</h4>
-            <div className="punkt-config">
-              <div className="input-group">
-                <label>Punkt Nr.:</label>
-                <div className="mb-input-group">
-                  <span className="mb-prefix">MB</span>
-                  <input 
-                    type="text" 
-                    value={endPunkt.punktNr.replace('MB', '')} 
-                    onChange={(e) => handleEndPunktChange('punktNr', 'MB' + e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="input-group">
-                <label>Absolute Höhe [m]:</label>
-                <input 
+          <Grid item xs={12} md={6}>
+            <SetupCard>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Endpunkt</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth>
+                      <InputLabel shrink>Punkt Nr.</InputLabel>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MBInputGroup>
+                          <MBPrefix>MB</MBPrefix>
+                          <TextField
+                            fullWidth
+                            value={endPunkt.punktNr.replace('MB', '')}
+                            onChange={(e) => handleEndPunktChange('punktNr', 'MB' + e.target.value)}
+                            variant="outlined"
+                            size="small"
+                          />
+                        </MBInputGroup>
+                      </Box>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Absolute Höhe [m]"
                   type="number" 
-                  step="0.001" 
+                      InputProps={{
+                        inputProps: { step: 0.001 }
+                      }}
                   value={endPunkt.absoluteHoehe || ''} 
                   onChange={(e) => handleEndPunktChange('absoluteHoehe', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+                      variant="outlined"
+                      size="small"
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </SetupCard>
+          </Grid>
+        </Grid>
         
-        <div className="setup-container strecke-wrapper">
-          <div className="strecke-container">
-            <div className="input-group">
-              <label>Streckenlänge [km]:</label>
-              <input 
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <SetupCard>
+              <CardContent>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Streckenlänge [km]"
                 type="number" 
-                step="0.001" 
-                min="0.001"
+                      InputProps={{
+                        inputProps: { step: 0.001, min: 0.001 }
+                      }}
                 value={streckeLaenge !== null ? streckeLaenge : ''}
                 onChange={(e) => handleStreckeLaengeChange(e.target.value === '' ? null : parseFloat(e.target.value))} 
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="nivellement-table">
-        <style>
-          {`
-            /* Alignment Styles */
-            .row-type-MB td:nth-child(2) input, .row-type-MB td:nth-child(2) span {
-              text-align: center;
-            }
-            .row-type-W td:nth-child(2) input, .row-type-W td:nth-child(2) span, 
-            .row-type-W td:nth-child(2) div {
-              text-align: right;
-            }
-            .row-type-M td:nth-child(2) input, .row-type-M td:nth-child(2) span, 
-            .row-type-M td:nth-child(2) div {
-              text-align: left;
-            }
-            
-            /* Alignment für Zahlenwerte */
-            .row-type-MB td:nth-child(3) input, .row-type-MB td:nth-child(4) input, 
-            .row-type-MB td:nth-child(5) input, .row-type-MB td:nth-child(6) span, 
-            .row-type-MB td:nth-child(7) span,
-            .row-type-W td:nth-child(3) input, .row-type-W td:nth-child(4) input, 
-            .row-type-W td:nth-child(5) input, .row-type-W td:nth-child(6) span, 
-            .row-type-W td:nth-child(7) span {
-              text-align: right;
-            }
-            .row-type-M td:nth-child(3) input, .row-type-M td:nth-child(4) input, 
-            .row-type-M td:nth-child(5) input, .row-type-M td:nth-child(6) span, 
-            .row-type-M td:nth-child(7) span {
-              text-align: left;
-            }
-            
-            /* Alignment für Bemerkungen */
-            .row-type-MB td:nth-child(8) input, .row-type-W td:nth-child(8) input, 
-            .row-type-M td:nth-child(8) input {
-              text-align: center;
-            }
-            
-            /* Alignment für die neue Zeile */
-            .new-row td:nth-child(8) input {
-              text-align: center;
-            }
-            
-            /* Styling für die Setup-Container */
-            .nivellement-setup {
-              margin-bottom: 20px;
-            }
-            
-            .setup-container {
-              display: flex;
-              justify-content: space-between;
-              gap: 20px;
-            }
-            
-            .start-punkt-container, .end-punkt-container {
-              flex: 1;
-              padding: 15px;
-              border: 1px solid #ccc;
-              border-radius: 5px;
-              background-color: #f9f9f9;
-            }
-            
-            .punkt-config {
-              display: flex;
-              flex-direction: column;
-              gap: 10px;
-            }
-            
-            .input-group {
-              display: flex;
-              align-items: center;
-            }
-            
-            .input-group label {
-              width: 150px;
-              font-weight: bold;
-            }
-            
-            .input-group input {
-              flex: 1;
-              padding: 5px;
-            }
-            
-            /* Hervorhebung der Start- und Endzeilen in der Tabelle */
-            tr[data-punkt-type="MB"]:first-child td:not(:last-child) {
-              background-color: #f0f7ff;
-              border-top: 2px solid #4a90e2;
-              border-bottom: 2px solid #4a90e2;
-            }
-            
-            tr[data-punkt-type="MB"]:last-child td:not(:last-child) {
-              background-color: #f7f0ff;
-              border-top: 2px solid #9c4ae2;
-              border-bottom: 2px solid #9c4ae2;
-            }
-            
-            /* Spezifischer Style für die Aktionen-Spalte */
-            tr[data-punkt-type="MB"] td:last-child {
-              background-color: transparent;
-              border-top: none;
-              border-bottom: none;
-            }
-            
-            /* Hervorhebung der Absolutwerte für Start und Ende */
-            tr[data-punkt-type="MB"]:first-child td:nth-child(7) span {
-              font-weight: bold;
-              color: #4a90e2;
-            }
-            
-            tr[data-punkt-type="MB"]:last-child td:nth-child(7) span {
-              font-weight: bold;
-              color: #9c4ae2;
-            }
-            
-            /* CSS für das geteilte Tabellenlayout */
-            .nivellement-table {
-              overflow-x: auto;
-            }
-            
-            .nivellement-table table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 0;
-              table-layout: fixed;
-            }
-            
-            .nivellement-table .data-table,
-            .nivellement-table .new-row-table {
-              border-top: none;
-            }
-            
-            .nivellement-table table th {
-              position: sticky;
-              top: 0;
-              background-color: #f2f2f2;
-              z-index: 10;
-              padding: 8px 10px;
-              font-weight: bold;
-              text-align: center;
-            }
-            
-            .nivellement-table table td {
-              padding: 6px 10px;
-              vertical-align: middle;
-            }
-            
-            /* Exakte Spaltenbreiten für alle drei Tabellen */
-            .nivellement-table table colgroup {
-              display: table-column-group;
-            }
-            
-            .nivellement-table table col.col-handle { width: 40px; }
-            .nivellement-table table col.col-punkt-nr { width: 110px; }
-            .nivellement-table table col.col-rueckblick { width: 120px; }
-            .nivellement-table table col.col-mittelblick { width: 120px; }
-            .nivellement-table table col.col-vorblick { width: 120px; }
-            .nivellement-table table col.col-delta-h { width: 105px; }
-            .nivellement-table table col.col-abs-hoehe { width: 120px; }
-            .nivellement-table table col.col-bemerkung { width: 160px; }
-            .nivellement-table table col.col-aktionen { width: 50px; }
-            
-            /* Eingabefelder und Selects formatieren */
-            .nivellement-table table input,
-            .nivellement-table table select {
-              width: 100%;
-              box-sizing: border-box;
-              padding: 4px 6px;
-              border: 1px solid #ccc;
-              border-radius: 3px;
-            }
-            
-            /* Entferne Pfeile bei Zahlenfeldern */
-            .nivellement-table table input[type="number"] {
-              -moz-appearance: textfield;
-            }
-            
-            .nivellement-table table input[type="number"]::-webkit-outer-spin-button,
-            .nivellement-table table input[type="number"]::-webkit-inner-spin-button {
-              -webkit-appearance: none;
-              margin: 0;
-            }
-            
-            /* Verbessere die Darstellung für Zahleneingaben */
-            .nivellement-table table input[type="number"] {
-              text-overflow: ellipsis;
-              font-family: monospace;
-              font-size: 14px;
-              text-align: right;
-              letter-spacing: 0.5px;
-            }
-            
-            /* Verbessere die Darstellung von berechneten Zahlenwerten */
-            .nivellement-table td span:not(.korrektur-wert):not(.punkt-nummer) {
-              font-family: monospace;
-              font-size: 14px;
-              letter-spacing: 0.5px;
-              display: block;
-            }
-            
-            .row-type-MB td:nth-child(6) span, .row-type-MB td:nth-child(7) span,
-            .row-type-W td:nth-child(6) span, .row-type-W td:nth-child(7) span {
-              text-align: right;
-            }
-            
-            .row-type-M td:nth-child(6) span, .row-type-M td:nth-child(7) span {
-              text-align: left;
-            }
-            
-            /* Punkt-Typ Flex-Container */
-            .punkt-type-container {
-              display: flex;
-              align-items: center;
-              width: 100%;
-            }
-            
-            .punkt-type-container select {
-              width: auto;
-              min-width: 45px;
-              max-width: 55px;
-            }
-            
-            .punkt-nummer {
-              margin-left: 15px;
-              white-space: nowrap;
-            }
-            
-            /* Button-Styling verbessern */
-            .delete-button, .add-button {
-              width: 30px;
-              height: 30px;
-              padding: 4px;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              border-radius: 4px;
-              margin: 0 auto;
-            }
-            
-            .delete-button {
-              background-color: #e74c3c;
-              color: white;
-              border: none;
-            }
-            
-            .add-button {
-              background-color: #27ae60;
-              color: white;
-              border: none;
-            }
-            
-            /* Spezifische Styling für disabled inputs */
-            .disabled-input {
-              background-color: #f9f9f9;
-              color: #999;
-              border-color: #ddd;
-              display: none;
-            }
-            
-            /* Style für leere Zellen */
-            .empty-cell {
-              text-align: center;
-              color: #aaa;
-            }
-            
-            /* Drag-Handle Styling */
-            .static-handle {
-              opacity: 0.5;
-              cursor: not-allowed;
-            }
-            
-            .drag-handle {
-              cursor: grab;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              color: #777;
-            }
-            
-            /* Dropdown in der neuen Zeile */
-            .new-row-dropdown {
-              max-width: 150px;
-            }
-            
-            .new-row select {
-              max-width: 150px;
-            }
-            
-            /* Styles für Fehlerkorrektur-Buttons */
-            .korrektur-container {
-              display: flex;
-              align-items: center;
-              margin-left: 8px;
-            }
-            
-            .korrektur-buttons {
-              display: flex;
-              flex-direction: column;
-              margin-left: 4px;
-            }
-            
-            .korrektur-button {
-              background-color: #f0f0f0;
-              border: 1px solid #ccc;
-              width: 20px;
-              height: 20px;
-              font-size: 14px;
-              line-height: 1;
-              padding: 0;
-              margin: 1px;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            
-            .korrektur-button:hover {
-              background-color: #e0e0e0;
-            }
-            
-            .korrektur-wert {
-              color: red;
-              font-size: 0.8em;
-              margin-left: 4px;
-              white-space: nowrap;
-            }
-            
-            /* Zusätzliche Styles für die Korrektur-Aktions-Buttons */
-            .korrektur-actions {
-              display: flex;
-              gap: 8px;
-              margin-top: 10px;
-            }
-            
-            .korrektur-apply-button, .korrektur-reset-button {
-              padding: 5px 10px;
-              border-radius: 4px;
-              cursor: pointer;
-            }
-            
-            .korrektur-apply-button {
-              background-color: #4caf50;
-              color: white;
-              border: none;
-            }
-            
-            .korrektur-reset-button {
-              background-color: #f44336;
-              color: white;
-              border: none;
-            }
-            
-            .fehlerverteilung-container {
-              border: 1px solid #ddd;
-              border-radius: 5px;
-              padding: 10px;
-              margin-top: 15px;
-              background-color: #f9f9f9;
-            }
-            
-            .fehlerverteilung-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 8px;
-            }
-            
-            .fehlerverteilung-header h4 {
-              margin: 0;
-            }
-            
-            .korrektur-status {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 15px;
-              margin-bottom: 10px;
-            }
-            
-            .korrektur-status-item {
-              display: flex;
-              align-items: center;
-            }
-            
-            .korrektur-status-label {
-              font-weight: bold;
-              margin-right: 5px;
-            }
-            
-            .korrektur-status-value {
-              font-family: monospace;
-            }
-            
-            .korrektur-status-value.positiv {
-              color: #2e7d32;
-            }
-            
-            .korrektur-status-value.negativ {
-              color: #c62828;
-            }
+                      variant="outlined"
+                      size="small"
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </SetupCard>
+          </Grid>
+        </Grid>
 
-            .manual-corrections-container {
-              border: 1px solid #ddd;
-              border-radius: 5px;
-              padding: 10px;
-              margin-top: 15px;
-              background-color: #f9f9f9;
-            }
-            
-            .korrektur-status {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 15px;
-              margin-bottom: 10px;
-            }
-            
-            .korrektur-status-item {
-              display: flex;
-              align-items: center;
-            }
-            
-            .korrektur-status-label {
-              font-weight: bold;
-              margin-right: 5px;
-            }
-            
-            .korrektur-status-value {
-              font-family: monospace;
-            }
-            
-            .korrektur-status-value.positiv {
-              color: #2e7d32;
-            }
-            
-            .korrektur-status-value.negativ {
-              color: #c62828;
-            }
-            
-            /* MB Präfix und Eingabe Styling */
-            .mb-input-group {
-              display: flex;
-              flex: 1;
-              align-items: center;
-            }
-            
-            .mb-prefix {
-              background-color: #f2f2f2;
-              padding: 1.5px 8px;
-              border: 1px solid #ccc;
-              border-right: none;
-              border-radius: 3px 0 0 3px;
-              font-weight: bold;
-              color: #666;
-            }
-            
-            .mb-input-group input {
-              flex: 1;
-              border-radius: 0 3px 3px 0;
-            }
-          `}
-        </style>
-        <table>
-          <colgroup>
-            <col className="col-handle" />
-            <col className="col-punkt-nr" />
-            <col className="col-rueckblick" />
-            <col className="col-mittelblick" />
-            <col className="col-vorblick" />
-            <col className="col-delta-h" />
-            <col className="col-abs-hoehe" />
-            <col className="col-bemerkung" />
-            <col className="col-aktionen" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th></th>{/* Spalte für Drag-Handle */}
-              <th>Punkt Nr.</th>
-              <th>Rückblick [r]</th>
-              <th>Mittelblick [m]</th>
-              <th>Vorblick [v]</th>
-              <th>Δh</th>
-              <th>Absolute Höhe h</th>
-              <th>Bemerkung</th>
-              <th></th>
-            </tr>
-          </thead>
-        </table>
-        
-        {/* DndContext außerhalb der Tabelle platzieren */}
+        <Box sx={{ mb: 4 }}>
+          <TableContainer component={Paper}>
         <DndContext 
           sensors={sensors} 
           collisionDetection={closestCenter}
@@ -1314,28 +942,31 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
         >
           <SortableContext 
             items={punkteIds} 
-            strategy={verticalListSortingStrategy}
-          >
-            <table className="data-table">
-              <colgroup>
-                <col className="col-handle" />
-                <col className="col-punkt-nr" />
-                <col className="col-rueckblick" />
-                <col className="col-mittelblick" />
-                <col className="col-vorblick" />
-                <col className="col-delta-h" />
-                <col className="col-abs-hoehe" />
-                <col className="col-bemerkung" />
-                <col className="col-aktionen" />
-              </colgroup>
-              <tbody>
-                {/* Start-Punkt und mittlere Punkte anzeigen */}
-                {punkte.slice(0, -1).map((punkt, index) => {
+                strategy={rectSortingStrategy}
+              >
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell style={{ width: '32px', padding: '4px' }}></TableCell>
+                      <TableCell style={{ width: '70px', padding: '4px' }}>Punkt Nr.</TableCell>
+                      <TableCell style={{ width: '140px', padding: '4px' }}>Rückblick [r]</TableCell>
+                      <TableCell style={{ width: '120px', padding: '4px' }}>Mittelblick [m]</TableCell>
+                      <TableCell style={{ width: '120px', padding: '4px' }}>Vorblick [v]</TableCell>
+                      <TableCell style={{ width: '105px', padding: '4px' }}>Δh</TableCell>
+                      <TableCell style={{ width: '120px', padding: '4px' }}>Absolute Höhe h</TableCell>
+                      <TableCell style={{ width: '160px', padding: '4px' }}>Bemerkung</TableCell>
+                      <TableCell style={{ width: '50px', padding: '4px' }}></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {/* Start-Punkt und mittlere Punkte anzeigen */}
+                    {punkte.slice(0, -1).map((punkt, index) => {
                   // Sicherstellen, dass displayPunkte[index] existiert
                   const displayPunkt = displayPunkte[index] || punkt;
-                  const isStatic = index === 0;
+                      const isStatic = index === 0;
                   const isWechselpunkt = punkt.punktNr.startsWith('W');
-                  const korrekturWert = fehlerKorrekturen[index];
+                      // Die Variable korrekturWert nicht mehr verwenden
+                      const punktType = getPunktType(punkt.punktNr);
                   
                   return (
                     <SortableTableRow 
@@ -1344,341 +975,471 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                       index={index} 
                       isStatic={isStatic}
                     >
-                      {(dragHandleProps) => (<>
-                          <td className="drag-handle-cell">
+                          {(dragHandleProps) => (
+                            <>
+                              <TableCell>
                             {!isStatic && (
-                              <div {...dragHandleProps}>
+                                  <Box {...dragHandleProps}>
                                 <DragHandle />
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            {punkt.punktNr.startsWith('MB') ? (
-                              <input
-                                type="text"
-                                value={punkt.punktNr}
-                                onChange={(e) => handleInputChange(index, 'punktNr', e.target.value)}
-                                disabled={isStatic}
-                              />
-                            ) : (
-                              <div className="punkt-type-container">
-                                <select
-                                  value={punkt.punktNr.charAt(0)}
-                                  onChange={(e) => handleInputChange(index, 'punktNr', e.target.value)}
-                                  disabled={isStatic}
-                                >
-                                  <option value="W">W</option>
-                                  <option value="M">M</option>
-                                </select>
-                                <span className="punkt-nummer">{punkt.punktNr.substring(1)}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              {isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? (
-                                <input
-                                  type="number"
-                                  step="0.001"
-                                  value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
-                                  onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
-                                />
-                              ) : (
-                                <span className="empty-cell">-</span>
-                              )}
-                              
-                              {(isWechselpunkt || (index === 0 && punkt.punktNr.startsWith('MB'))) && isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) && (
-                                <div className="korrektur-container">
-                                  {korrekturWert !== undefined && korrekturWert !== 0 && (
-                                    <span className="korrektur-wert">
-                                      {korrekturWert > 0 ? '+' : ''}{Math.round(korrekturWert)}
-                                    </span>
+                                  </Box>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {punkt.punktNr}
+                                </Typography>
+                              </TableCell>
+                              <TableCell 
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  {isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) ? (
+                                    <TextField
+                                      fullWidth
+                                type="number"
+                                      inputProps={{ 
+                                        step: 0.001,
+                                        style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                      }}
+                                value={punkt.rueckblick !== null ? punkt.rueckblick : ''}
+                                onChange={(e) => handleInputChange(index, 'rueckblick', e.target.value)}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                    />
+                                  ) : (
+                                    <EmptyCell>-</EmptyCell>
                                   )}
-                                  <div className="korrektur-buttons">
-                                    <button 
-                                      className="korrektur-button" 
+                                  
+                                  {(isWechselpunkt || (index === 0 && punkt.punktNr.startsWith('MB'))) && 
+                                   isFieldEditable(punkt.punktNr, 'rueckblick', index, punkte.length - 1) && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                                      {fehlerKorrekturen[punkt.punktNr] !== undefined && fehlerKorrekturen[punkt.punktNr] !== 0 && (
+                                        <Typography variant="caption" color="error" sx={{ ml: 0.5, whiteSpace: 'nowrap' }}>
+                                          {fehlerKorrekturen[punkt.punktNr] > 0 ? '+' : ''}{Math.round(fehlerKorrekturen[punkt.punktNr])}
+                                        </Typography>
+                                      )}
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', ml: 0.5 }}>
+                                        <IconButton 
+                                          size="small" 
                                       onClick={() => addPunktKorrektur(index, true)}
                                       title="Korrektur erhöhen (+1 mm)"
-                                    >
-                                      +
-                                    </button>
-                                    <button 
-                                      className="korrektur-button" 
+                                          sx={{ p: 0.2 }}
+                                        >
+                                          <Typography variant="caption">+</Typography>
+                                        </IconButton>
+                                        <IconButton 
+                                          size="small" 
                                       onClick={() => addPunktKorrektur(index, false)}
                                       title="Korrektur verringern (-1 mm)"
-                                    >
-                                      -
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            {isFieldEditable(punkt.punktNr, 'mittelblick', index, punkte.length - 1) ? (
-                              <input
-                                type="number"
-                                step="0.001"
-                                value={punkt.mittelblick !== null ? punkt.mittelblick : ''}
-                                onChange={(e) => handleInputChange(index, 'mittelblick', e.target.value)}
-                              />
-                            ) : (
-                              <span className="empty-cell">-</span>
-                            )}
-                          </td>
-                          <td>
-                            {isFieldEditable(punkt.punktNr, 'vorblick', index, punkte.length - 1) ? (
-                              <input
-                                type="number"
-                                step="0.001"
-                                value={punkt.vorblick !== null ? punkt.vorblick : ''}
-                                onChange={(e) => handleInputChange(index, 'vorblick', e.target.value)}
-                              />
-                            ) : (
-                              <span className="empty-cell">-</span>
-                            )}
-                          </td>
-                          <td>
-                            <span>{displayPunkt.deltaH !== null ? displayPunkt.deltaH.toFixed(3) : '-'}</span>
-                          </td>
-                          <td>
-                            {(index === 0) ? (
-                              <span>{startPunkt.absoluteHoehe !== null ? startPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
-                            ) : (
-                              <span>{displayPunkt.absoluteHoehe !== null ? displayPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
-                            )}
-                          </td>
-                          <td>
-                            <input
-                              type="text"
+                                          sx={{ p: 0.2 }}
+                                        >
+                                          <Typography variant="caption">-</Typography>
+                                        </IconButton>
+                                      </Box>
+                                    </Box>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell 
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
+                                {isFieldEditable(punkt.punktNr, 'mittelblick', index, punkte.length - 1) ? (
+                                  <TextField
+                                    fullWidth
+                              type="number"
+                                    inputProps={{ 
+                                      step: 0.001,
+                                      style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                    }}
+                              value={punkt.mittelblick !== null ? punkt.mittelblick : ''}
+                              onChange={(e) => handleInputChange(index, 'mittelblick', e.target.value)}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                  />
+                                ) : (
+                                  <EmptyCell>-</EmptyCell>
+                                )}
+                              </TableCell>
+                              <TableCell 
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
+                                {isFieldEditable(punkt.punktNr, 'vorblick', index, punkte.length - 1) ? (
+                                  <TextField
+                                    fullWidth
+                              type="number"
+                                    inputProps={{ 
+                                      step: 0.001,
+                                      style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                    }}
+                              value={punkt.vorblick !== null ? punkt.vorblick : ''}
+                              onChange={(e) => handleInputChange(index, 'vorblick', e.target.value)}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                  />
+                                ) : (
+                                  <EmptyCell>-</EmptyCell>
+                                )}
+                              </TableCell>
+                              <TableCell 
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
+                                {displayPunkt.deltaH !== null && displayPunkt.deltaH !== undefined ? (
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontFamily: 'monospace', 
+                                      fontWeight: 500,
+                                      color: displayPunkt.deltaH < 0 ? 'error.main' : 'inherit'
+                                    }}
+                                  >
+                                    {formatNumber(displayPunkt.deltaH)}
+                                  </Typography>
+                                ) : (
+                                  <EmptyCell>-</EmptyCell>
+                                )}
+                              </TableCell>
+                              <TableCell 
+                                align={
+                                  punktType === 'MB' || punktType === 'W' ? 'right' : 'left'
+                                }
+                              >
+                                {displayPunkt.absoluteHoehe !== null && displayPunkt.absoluteHoehe !== undefined ? (
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontFamily: 'monospace', 
+                                      fontWeight: 500 
+                                    }}
+                                  >
+                                    {formatNumber(displayPunkt.absoluteHoehe)}
+                                  </Typography>
+                                ) : (
+                                  <EmptyCell>-</EmptyCell>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
                               value={punkt.bemerkung || ''}
                               onChange={(e) => handleInputChange(index, 'bemerkung', e.target.value)}
-                            />
-                          </td>
-                          <td className="action-buttons">
+                                  size="small"
+                                  variant="outlined"
+                                  inputProps={{ 
+                                    style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                  }}
+                                  sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                />
+                              </TableCell>
+                              <TableCell className="action-buttons">
                             {!isStatic ? (
-                              <button
+                              <Button
                                 onClick={() => removeRow(index)}
-                                className="delete-button"
                                 title="Löschen"
+                                color="error"
+                                variant="contained"
+                                size="small"
+                                sx={{ minWidth: 'auto', p: '4px' }}
                               >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M3 6H5H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
+                                <DeleteIcon fontSize="small" />
+                              </Button>
                             ) : null}
-                          </td>
-                        </>)}
+                              </TableCell>
+                            </>
+                          )}
                     </SortableTableRow>
                   );
                 })}
 
-                {/* Neue Zeile zum Hinzufügen */}
-                <tr className="new-row">
-                  <td className="drag-handle-cell"><div className="static-handle"><DragHandle /></div></td>
-                  <td>
-                    <select
-                      value={newRow.punktNr}
-                      onChange={(e) => handleNewRowInputChange('punktNr', e.target.value)}
-                      className="new-row-dropdown"
-                      onKeyDown={handleKeyDown}
-                    >
-                      <option value="W">Wechselpunkt (W)</option>
-                      <option value="M">Mittelblick (M)</option>
-                    </select>
-                  </td>
-                  <td>
-                    {isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? (
-                      <input
-                        ref={rueckblickRef}
-                        type="number"
-                        step="0.001"
-                        value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
-                        onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
-                        placeholder="Rückblick"
-                        onKeyDown={handleKeyDown}
-                      />
-                    ) : (
-                      <span className="empty-cell">-</span>
-                    )}
-                  </td>
-                  <td>
-                    {isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? (
-                      <input
-                        ref={mittelblickRef}
-                        type="number"
-                        step="0.001"
-                        value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
-                        onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
-                        placeholder="Mittelblick"
-                        onKeyDown={handleKeyDown}
-                      />
-                    ) : (
-                      <span className="empty-cell">-</span>
-                    )}
-                  </td>
-                  <td>
-                    {isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? (
-                      <input
-                        ref={vorblickRef}
-                        type="number"
-                        step="0.001"
-                        value={newRow.vorblick !== null ? newRow.vorblick : ''}
-                        onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
-                        placeholder="Vorblick"
-                        onKeyDown={handleKeyDown}
-                      />
-                    ) : (
-                      <span className="empty-cell">-</span>
-                    )}
-                  </td>
-                  <td>
-                    <span>-</span>
-                  </td>
-                  <td>
-                    <span>-</span>
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={newRow.bemerkung}
-                      onChange={(e) => handleNewRowInputChange('bemerkung', e.target.value)}
-                      placeholder="Bemerkung"
-                      onKeyDown={handleKeyDown}
-                    />
-                  </td>
-                  <td className="action-buttons">
-                    <button 
-                      onClick={addNewRow} 
-                      disabled={!newRow.punktNr || (!newRow.punktNr.startsWith('W') && !newRow.punktNr.startsWith('M'))}
-                      className="add-button"
-                      title="Hinzufügen"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 5V19M5 12H19" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-                
-                {/* Endpunkt anzeigen */}
-                {punkte.length > 0 && (
-                  <SortableTableRow 
-                    key={`punkt-${punkte.length - 1}`} 
-                    punkt={punkte[punkte.length - 1]} 
-                    index={punkte.length - 1} 
-                    isStatic={true}
-                  >
-                    {() => {
-                      const lastPunkt = punkte[punkte.length - 1];
-                      const lastDisplayPunkt = displayPunkte[punkte.length - 1] || lastPunkt;
-                      
-                      return (<>
-                        <td className="drag-handle-cell"></td>
-                        <td>
-                          <input
-                            type="text"
-                            value={lastPunkt.punktNr}
-                            onChange={(e) => handleInputChange(punkte.length - 1, 'punktNr', e.target.value)}
-                            disabled={true}
+                    {/* Neue Zeile zum Hinzufügen */}
+                    <TableRow className="new-row">
+                      <TableCell>
+                        <Box className="static-handle">
+                          <DragHandle />
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          fullWidth
+                  value={newRow.punktNr}
+                          onChange={(e) => handleNewRowInputChange('punktNr', e.target.value as string)}
+                          size="small"
+                          variant="outlined"
+                  onKeyDown={handleKeyDown}
+                          sx={{ 
+                            '.MuiOutlinedInput-root': { height: '28px' },
+                            '.MuiInputBase-input': { padding: '2px 4px', fontSize: '0.75rem' }
+                          }}
+                        >
+                          <MenuItem value="W">Wechselpunkt (W)</MenuItem>
+                          <MenuItem value="M">Mittelblick (M)</MenuItem>
+                        </Select>
+                      </TableCell>
+                      <TableCell align={newRow.punktNr === 'W' ? 'right' : 'left'}>
+                        {isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? (
+                          <TextField
+                            fullWidth
+                            inputRef={rueckblickRef}
+                  type="number"
+                            inputProps={{ 
+                              step: 0.001,
+                              style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                            }}
+                  value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
+                  onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
+                  placeholder="Rückblick"
+                  onKeyDown={handleKeyDown}
+                            size="small"
+                            variant="outlined"
+                            sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
                           />
-                        </td>
-                        <td>
-                          {isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1) ? (
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={lastPunkt.rueckblick !== null ? lastPunkt.rueckblick : ''}
-                              onChange={(e) => handleInputChange(punkte.length - 1, 'rueckblick', e.target.value)}
-                            />
-                          ) : (
-                            <span className="empty-cell">-</span>
-                          )}
-                        </td>
-                        <td>
-                          {isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1) ? (
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={lastPunkt.mittelblick !== null ? lastPunkt.mittelblick : ''}
-                              onChange={(e) => handleInputChange(punkte.length - 1, 'mittelblick', e.target.value)}
-                            />
-                          ) : (
-                            <span className="empty-cell">-</span>
-                          )}
-                        </td>
-                        <td>
-                          {isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1) ? (
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={lastPunkt.vorblick !== null ? lastPunkt.vorblick : ''}
-                              onChange={(e) => handleInputChange(punkte.length - 1, 'vorblick', e.target.value)}
-                            />
-                          ) : (
-                            <span className="empty-cell">-</span>
-                          )}
-                        </td>
-                        <td>
-                          <span>{lastDisplayPunkt.deltaH !== null ? lastDisplayPunkt.deltaH.toFixed(3) : '-'}</span>
-                        </td>
-                        <td>
-                          <span>{endPunkt.absoluteHoehe !== null ? endPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={lastPunkt.bemerkung || ''}
-                            onChange={(e) => handleInputChange(punkte.length - 1, 'bemerkung', e.target.value)}
+                        ) : (
+                          <EmptyCell>-</EmptyCell>
+                        )}
+                      </TableCell>
+                      <TableCell align={newRow.punktNr === 'M' ? 'left' : 'right'}>
+                        {isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? (
+                          <TextField
+                            fullWidth
+                            inputRef={mittelblickRef}
+                  type="number"
+                            inputProps={{ 
+                              step: 0.001,
+                              style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                            }}
+                  value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
+                  onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
+                  placeholder="Mittelblick"
+                  onKeyDown={handleKeyDown}
+                            size="small"
+                            variant="outlined"
+                            sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
                           />
-                        </td>
-                        <td className="action-buttons"></td>
-                      </>);
-                    }}
-                  </SortableTableRow>
-                )}
-              </tbody>
-            </table>
-          </SortableContext>
-        </DndContext>
-      </div>
-      
-      {/* Füge Auswertungszusammenfassung direkt unter Tabelle hinzu */}
+                        ) : (
+                          <EmptyCell>-</EmptyCell>
+                        )}
+                      </TableCell>
+                      <TableCell align={newRow.punktNr === 'W' ? 'right' : 'left'}>
+                        {isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? (
+                          <TextField
+                            fullWidth
+                            inputRef={vorblickRef}
+                  type="number"
+                            inputProps={{ 
+                              step: 0.001,
+                              style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                            }}
+                  value={newRow.vorblick !== null ? newRow.vorblick : ''}
+                  onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
+                  placeholder="Vorblick"
+                  onKeyDown={handleKeyDown}
+                            size="small"
+                            variant="outlined"
+                            sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                          />
+                        ) : (
+                          <EmptyCell>-</EmptyCell>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <EmptyCell>-</EmptyCell>
+                      </TableCell>
+                      <TableCell>
+                        <EmptyCell>-</EmptyCell>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                  value={newRow.bemerkung}
+                  onChange={(e) => handleNewRowInputChange('bemerkung', e.target.value)}
+                  placeholder="Bemerkung"
+                  onKeyDown={handleKeyDown}
+                          size="small"
+                          variant="outlined"
+                          inputProps={{ 
+                            style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                          }}
+                          sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                  onClick={addNewRow} 
+                  disabled={!newRow.punktNr || (!newRow.punktNr.startsWith('W') && !newRow.punktNr.startsWith('M'))}
+                          title="Hinzufügen"
+                          color="primary"
+                          variant="contained"
+                          size="small"
+                          sx={{ minWidth: 'auto', p: '4px' }}
+                        >
+                          <AddIcon fontSize="small" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Endpunkt anzeigen */}
       {punkte.length > 0 && (
-        <div className="table-summary">
-          <table className="summary-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-            <colgroup>
-              <col className="col-handle" style={{ width: '40px' }} />
-              <col className="col-punkt-nr" style={{ width: '110px' }} />
-              <col className="col-rueckblick" style={{ width: '120px' }} />
-              <col className="col-mittelblick" style={{ width: '120px' }} />
-              <col className="col-vorblick" style={{ width: '120px' }} />
-              <col className="col-delta-h" style={{ width: '105px' }} />
-              <col className="col-abs-hoehe" style={{ width: '120px' }} />
-              <col className="col-bemerkung" style={{ width: '160px' }} />
-              <col className="col-aktionen" style={{ width: '50px' }} />
-            </colgroup>
-            <tbody>
-              <tr className="summary-row">
-                <td></td>
-                <td></td>
-                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                      <SortableTableRow 
+                        key={`punkt-${punkte.length - 1}`} 
+                        punkt={punkte[punkte.length - 1]} 
+                        index={punkte.length - 1} 
+                        isStatic={true}
+                      >
+                        {() => {
+                          const lastPunkt = punkte[punkte.length - 1];
+                          const lastDisplayPunkt = displayPunkte[punkte.length - 1] || lastPunkt;
+                          const punktType = getPunktType(lastPunkt.punktNr);
+                          
+                          return (<>
+                            <TableCell></TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {lastPunkt.punktNr}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align={punktType === 'MB' ? 'right' : 'left'}>
+                              {isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1) ? (
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  inputProps={{ 
+                                    step: 0.001,
+                                    style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                  }}
+                                  value={lastPunkt.rueckblick !== null ? lastPunkt.rueckblick : ''}
+                                  onChange={(e) => handleInputChange(punkte.length - 1, 'rueckblick', e.target.value)}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                />
+                              ) : (
+                                <EmptyCell>-</EmptyCell>
+                              )}
+                            </TableCell>
+                            <TableCell align={punktType === 'MB' ? 'right' : 'left'}>
+                              {isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1) ? (
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  inputProps={{ 
+                                    step: 0.001,
+                                    style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                  }}
+                                  value={lastPunkt.mittelblick !== null ? lastPunkt.mittelblick : ''}
+                                  onChange={(e) => handleInputChange(punkte.length - 1, 'mittelblick', e.target.value)}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                />
+                              ) : (
+                                <EmptyCell>-</EmptyCell>
+                              )}
+                            </TableCell>
+                            <TableCell align={punktType === 'MB' ? 'right' : 'left'}>
+                              {isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1) ? (
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  inputProps={{ 
+                                    step: 0.001,
+                                    style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                  }}
+                                  value={lastPunkt.vorblick !== null ? lastPunkt.vorblick : ''}
+                                  onChange={(e) => handleInputChange(punkte.length - 1, 'vorblick', e.target.value)}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                                />
+                              ) : (
+                                <EmptyCell>-</EmptyCell>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              {lastDisplayPunkt.deltaH !== null ? (
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                                  {formatNumber(lastDisplayPunkt.deltaH)}
+                                </Typography>
+                              ) : (
+                                <EmptyCell>-</EmptyCell>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              {endPunkt.absoluteHoehe !== null ? (
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                                  {formatNumber(endPunkt.absoluteHoehe)}
+                                </Typography>
+                              ) : (
+                                <EmptyCell>-</EmptyCell>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                value={lastPunkt.bemerkung || ''}
+                                onChange={(e) => handleInputChange(punkte.length - 1, 'bemerkung', e.target.value)}
+                                size="small"
+                                variant="outlined"
+                                inputProps={{ 
+                                  style: { padding: '2px 4px', fontSize: '0.75rem', height: '22px' }
+                                }}
+                                sx={{ '.MuiOutlinedInput-root': { height: '28px' } }}
+                              />
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </>);
+                        }}
+                      </SortableTableRow>
+                    )}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell></TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          Summen:
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
                   Σr = {calculateSummeRueckblick().toFixed(3)}
-                </td>
-                <td></td>
-                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                        </Typography>
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
                   Σv = {calculateSummeVorblick().toFixed(3)}
-                </td>
-                <td className="summary-value" style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
                   ΣΔh = {calculateSummeDeltaH().toFixed(3)}
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
+                        </Typography>
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </SortableContext>
+            </DndContext>
+          </TableContainer>
+        </Box>
+        
+        {/* Füge Auswertungszusammenfassung direkt unter Tabelle hinzu */}
+        {punkte.length > 0 && (
+          <Box className="table-summary" sx={{ mt: 2 }}>
+            {/* Die separate Summentabelle ist jetzt überflüssig und wird entfernt */}
           
           {/* Kurze Zusammenfassung der wichtigsten Auswertungsinformationen */}
           <div className="auswertung-summary" style={{ 
@@ -1715,11 +1476,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
             
             <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
               <div className={`auswertung-summary-item ${isSummeDeltaHKorrekt() ? 'success' : 'error'}`}>
-                <span>Summe Δh = Δh<sub>soll</sub>: </span>
+                  <span>Summe Δh = Δh<sub>soll</sub>:</span>
                 <span>{isSummeDeltaHKorrekt() ? 'Ja ✓' : 'Nein ✗'}</span>
               </div>
               <div className={`auswertung-summary-item ${Math.abs(calculateFehlerV() * 1000 - calculateGesamtKorrektur()) < 0.5 ? 'success' : 'error'}`}>
-                <span>Alle Fehler verteilt: </span>
+                  <span>Alle Fehler verteilt:</span>
                 <span>{Math.abs(calculateFehlerV() * 1000 - calculateGesamtKorrektur()) < 0.5 ? 'Ja ✓' : 'Nein ✗'}</span>
               </div>
             </div>
@@ -1849,8 +1610,9 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
               </div>
             </div>
           )}
-        </div>
+          </Box>
       )}
+      </Box>
     </>
   );
 };

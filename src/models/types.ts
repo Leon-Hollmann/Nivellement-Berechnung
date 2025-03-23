@@ -31,5 +31,5 @@ export interface Nivellement {
   streckeLaenge: number; // in Kilometern
   punkte: NivellementPunkt[];
   auswertung: NivellementAuswertung | null;
-  korrekturen: Record<number, number>;
+  korrekturen: Record<string | number, number>;
 } 
