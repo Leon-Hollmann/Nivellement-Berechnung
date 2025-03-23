@@ -1282,10 +1282,11 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                 <col className="col-aktionen" />
               </colgroup>
               <tbody>
-                {punkte.map((punkt, index) => {
+                {/* Start-Punkt und mittlere Punkte anzeigen */}
+                {punkte.slice(0, -1).map((punkt, index) => {
                   // Sicherstellen, dass displayPunkte[index] existiert
                   const displayPunkt = displayPunkte[index] || punkt;
-                  const isStatic = index === 0 || index === punkte.length - 1;
+                  const isStatic = index === 0;
                   const isWechselpunkt = punkt.punktNr.startsWith('W');
                   const korrekturWert = fehlerKorrekturen[index];
                   
@@ -1390,8 +1391,6 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                           <td>
                             {(index === 0) ? (
                               <span>{startPunkt.absoluteHoehe !== null ? startPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
-                            ) : (index === punkte.length - 1) ? (
-                              <span>{endPunkt.absoluteHoehe !== null ? endPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
                             ) : (
                               <span>{displayPunkt.absoluteHoehe !== null ? displayPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
                             )}
@@ -1417,103 +1416,160 @@ const NivellementTable: React.FC<NivellementTableProps> = ({
                     </SortableTableRow>
                   );
                 })}
+
+                {/* Neue Zeile zum Hinzufügen */}
+                <tr className="new-row">
+                  <td className="drag-handle-cell"><div className="static-handle"><DragHandle /></div></td>
+                  <td>
+                    <select
+                      value={newRow.punktNr}
+                      onChange={(e) => handleNewRowInputChange('punktNr', e.target.value)}
+                      className="new-row-dropdown"
+                      onKeyDown={handleKeyDown}
+                    >
+                      <option value="W">Wechselpunkt (W)</option>
+                      <option value="M">Mittelblick (M)</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      ref={rueckblickRef}
+                      type="number"
+                      step="0.001"
+                      value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
+                      onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
+                      disabled={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1)}
+                      className={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? 'disabled-input' : ''}
+                      placeholder="Rückblick"
+                      onKeyDown={handleKeyDown}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      ref={mittelblickRef}
+                      type="number"
+                      step="0.001"
+                      value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
+                      onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
+                      disabled={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1)}
+                      className={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? 'disabled-input' : ''}
+                      placeholder="Mittelblick"
+                      onKeyDown={handleKeyDown}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      ref={vorblickRef}
+                      type="number"
+                      step="0.001"
+                      value={newRow.vorblick !== null ? newRow.vorblick : ''}
+                      onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
+                      disabled={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1)}
+                      className={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? 'disabled-input' : ''}
+                      placeholder="Vorblick"
+                      onKeyDown={handleKeyDown}
+                    />
+                  </td>
+                  <td>
+                    <span>-</span>
+                  </td>
+                  <td>
+                    <span>-</span>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={newRow.bemerkung}
+                      onChange={(e) => handleNewRowInputChange('bemerkung', e.target.value)}
+                      placeholder="Bemerkung"
+                      onKeyDown={handleKeyDown}
+                    />
+                  </td>
+                  <td className="action-buttons">
+                    <button 
+                      onClick={addNewRow} 
+                      disabled={!newRow.punktNr || (!newRow.punktNr.startsWith('W') && !newRow.punktNr.startsWith('M'))}
+                      className="add-button"
+                    >
+                      Hinzufügen
+                    </button>
+                  </td>
+                </tr>
+                
+                {/* Endpunkt anzeigen */}
+                {punkte.length > 0 && (
+                  <SortableTableRow 
+                    key={`punkt-${punkte.length - 1}`} 
+                    punkt={punkte[punkte.length - 1]} 
+                    index={punkte.length - 1} 
+                    isStatic={true}
+                  >
+                    {() => {
+                      const lastPunkt = punkte[punkte.length - 1];
+                      const lastDisplayPunkt = displayPunkte[punkte.length - 1] || lastPunkt;
+                      
+                      return (<>
+                        <td className="drag-handle-cell"></td>
+                        <td>
+                          <input
+                            type="text"
+                            value={lastPunkt.punktNr}
+                            onChange={(e) => handleInputChange(punkte.length - 1, 'punktNr', e.target.value)}
+                            disabled={true}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={lastPunkt.rueckblick !== null ? lastPunkt.rueckblick : ''}
+                            onChange={(e) => handleInputChange(punkte.length - 1, 'rueckblick', e.target.value)}
+                            disabled={!isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1)}
+                            className={!isFieldEditable(lastPunkt.punktNr, 'rueckblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={lastPunkt.mittelblick !== null ? lastPunkt.mittelblick : ''}
+                            onChange={(e) => handleInputChange(punkte.length - 1, 'mittelblick', e.target.value)}
+                            disabled={!isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1)}
+                            className={!isFieldEditable(lastPunkt.punktNr, 'mittelblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={lastPunkt.vorblick !== null ? lastPunkt.vorblick : ''}
+                            onChange={(e) => handleInputChange(punkte.length - 1, 'vorblick', e.target.value)}
+                            disabled={!isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1)}
+                            className={!isFieldEditable(lastPunkt.punktNr, 'vorblick', punkte.length - 1, punkte.length - 1) ? 'disabled-input' : ''}
+                          />
+                        </td>
+                        <td>
+                          <span>{lastDisplayPunkt.deltaH !== null ? lastDisplayPunkt.deltaH.toFixed(3) : '-'}</span>
+                        </td>
+                        <td>
+                          <span>{endPunkt.absoluteHoehe !== null ? endPunkt.absoluteHoehe.toFixed(3) : '-'}</span>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={lastPunkt.bemerkung || ''}
+                            onChange={(e) => handleInputChange(punkte.length - 1, 'bemerkung', e.target.value)}
+                          />
+                        </td>
+                        <td className="action-buttons"></td>
+                      </>);
+                    }}
+                  </SortableTableRow>
+                )}
               </tbody>
             </table>
           </SortableContext>
         </DndContext>
-        
-        <table className="new-row-table">
-          <colgroup>
-            <col className="col-handle" />
-            <col className="col-punkt-nr" />
-            <col className="col-rueckblick" />
-            <col className="col-mittelblick" />
-            <col className="col-vorblick" />
-            <col className="col-delta-h" />
-            <col className="col-abs-hoehe" />
-            <col className="col-bemerkung" />
-            <col className="col-aktionen" />
-          </colgroup>
-          <tbody>
-            <tr className="new-row">
-              <td className="drag-handle-cell"><div className="static-handle"><DragHandle /></div></td>
-              <td>
-                <select
-                  value={newRow.punktNr}
-                  onChange={(e) => handleNewRowInputChange('punktNr', e.target.value)}
-                  className="new-row-dropdown"
-                  onKeyDown={handleKeyDown}
-                >
-                  <option value="W">Wechselpunkt (W)</option>
-                  <option value="M">Mittelblick (M)</option>
-                </select>
-              </td>
-              <td>
-                <input
-                  ref={rueckblickRef}
-                  type="number"
-                  step="0.001"
-                  value={newRow.rueckblick !== null ? newRow.rueckblick : ''}
-                  onChange={(e) => handleNewRowInputChange('rueckblick', e.target.value)}
-                  disabled={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1)}
-                  className={!isFieldEditable(newRow.punktNr || 'W', 'rueckblick', -1, -1) ? 'disabled-input' : ''}
-                  placeholder="Rückblick"
-                  onKeyDown={handleKeyDown}
-                />
-              </td>
-              <td>
-                <input
-                  ref={mittelblickRef}
-                  type="number"
-                  step="0.001"
-                  value={newRow.mittelblick !== null ? newRow.mittelblick : ''}
-                  onChange={(e) => handleNewRowInputChange('mittelblick', e.target.value)}
-                  disabled={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1)}
-                  className={!isFieldEditable(newRow.punktNr || 'M', 'mittelblick', -1, -1) ? 'disabled-input' : ''}
-                  placeholder="Mittelblick"
-                  onKeyDown={handleKeyDown}
-                />
-              </td>
-              <td>
-                <input
-                  ref={vorblickRef}
-                  type="number"
-                  step="0.001"
-                  value={newRow.vorblick !== null ? newRow.vorblick : ''}
-                  onChange={(e) => handleNewRowInputChange('vorblick', e.target.value)}
-                  disabled={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1)}
-                  className={!isFieldEditable(newRow.punktNr || 'W', 'vorblick', -1, -1) ? 'disabled-input' : ''}
-                  placeholder="Vorblick"
-                  onKeyDown={handleKeyDown}
-                />
-              </td>
-              <td>
-                <span>-</span>
-              </td>
-              <td>
-                <span>-</span>
-              </td>
-              <td>
-                <input
-                  type="text"
-                  value={newRow.bemerkung}
-                  onChange={(e) => handleNewRowInputChange('bemerkung', e.target.value)}
-                  placeholder="Bemerkung"
-                  onKeyDown={handleKeyDown}
-                />
-              </td>
-              <td className="action-buttons">
-                <button 
-                  onClick={addNewRow} 
-                  disabled={!newRow.punktNr || (!newRow.punktNr.startsWith('W') && !newRow.punktNr.startsWith('M'))}
-                  className="add-button"
-                >
-                  Hinzufügen
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
       
       {/* Füge Auswertungszusammenfassung direkt unter Tabelle hinzu */}
