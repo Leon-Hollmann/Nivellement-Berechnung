@@ -1030,7 +1030,7 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                       <TableCell style={{ width: '50px', padding: '4px' }}>Nr.</TableCell>
                       <TableCell style={{ width: '180px', padding: '4px' }}>Rückblick r [m]</TableCell>
                       <TableCell style={{ width: '120px', padding: '4px' }}>Mittelblick m [m]</TableCell>
-                      <TableCell style={{ width: '120px', padding: '4px' }}>Vorblick v [m]</TableCell>
+                      <TableCell style={{ width: '140px', padding: '4px' }}>Vorblick v [m]</TableCell>
                       <TableCell style={{ width: '140px', padding: '4px' }}>Δh [m]</TableCell>
                       <TableCell style={{ width: '140px', padding: '4px' }}>Höhe H [m]</TableCell>
                       <TableCell style={{ width: '180px', padding: '4px' }}>Bemerkung</TableCell>
@@ -1497,18 +1497,18 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                          Σr = {calculateSummeRueckblick().toFixed(3)} m
+                          Σr <wbr />= {calculateSummeRueckblick().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell></TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                          Σv = {calculateSummeVorblick().toFixed(3)} m
+                          Σv <wbr />= {calculateSummeVorblick().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                          ΣΔh = {calculateSummeDeltaH().toFixed(3)} m
+                          ΣΔh <wbr />= {calculateSummeDeltaH().toFixed(3)} m
                         </Typography>
                       </TableCell>
                       <TableCell></TableCell>
@@ -1536,22 +1536,22 @@ const NivellementTable: React.FC<NivellementTableComponentProps> = ({
           }}>
             <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
               <div className="auswertung-summary-item">
-                <span>Δh<sub>ist</sub> = Σr - Σv = </span>
+                <span>Δh<sub>ist</sub> = Σr - Σv<wbr /> = </span>
                 <span>{calculateDeltaHIst().toFixed(3)} m</span>
               </div>
               <div className="auswertung-summary-item">
-                <span>Δh<sub>soll</sub> = h<sub>Ende</sub> - h<sub>Start</sub> = </span>
+                <span>Δh<sub>soll</sub> = h<sub>Ende</sub> - h<sub>Start</sub><wbr /> = </span>
                 <span>{calculateDeltaHSoll().toFixed(3)} m</span>
               </div>
             </div>
             
             <div className="auswertung-column" style={{ flex: '1', minWidth: '200px', padding: '0 10px' }}>
               <div className="auswertung-summary-item">
-                <span>Fehler v = Δh<sub>soll</sub> - Δh<sub>ist</sub> = </span>
+                <span>Fehler v = Δh<sub>soll</sub> - Δh<sub>ist</sub><wbr /> = </span>
                 <span>{calculateFehlerV().toFixed(3)} m</span>
               </div>
               <div className="auswertung-summary-item">
-                <span>Zulässiger Fehler <br /> v<sub>zul</sub> = 15mm · √L = </span>
+                <span>Zulässiger Fehler<br />v<sub>zul</sub> = 15mm · √L<wbr /> = </span>
                 <span>{calculateZulaessigerFehler().toFixed(3)} m</span>
               </div>
               <div className={`auswertung-summary-item ${isFehlerZulaessig() ? 'success' : 'error'}`}>
