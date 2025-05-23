@@ -60,16 +60,10 @@ export const calculateDeltaH = (
       return null;
     }
     
-    // MBn hat nur Vorblick, Delta H ist Rückblick des vorherigen Punkts - Vorblick des aktuellen
-    const prevRow = punkte[rowIndex - 1];
-    if (prevRow && currentPunkt.vorblick !== null) {
-      const prevPunktTyp = getPunktTyp(prevRow.punktNr);
-      if (prevPunktTyp === 'W' || prevPunktTyp === 'MB') {
-        const korrigierterRueckblick = applyRueckblickKorrektur(prevRow.rueckblick, prevRow, rowIndex - 1);
-        return prevRow.rueckblick !== null ? korrigierterRueckblick - currentPunkt.vorblick : null;
-      } else if (prevPunktTyp === 'M' && prevRow.mittelblick !== null) {
-        return prevRow.mittelblick - currentPunkt.vorblick;
-      }
+    // MBn hat nur Vorblick, Delta H ist Rückblick des vorherigen W/MB-Punkts - Vorblick des aktuellen
+    if (prevPunkt && prevPunkt.rueckblick !== null && currentPunkt.vorblick !== null) {
+      const korrigierterRueckblick = applyRueckblickKorrektur(prevPunkt.rueckblick, prevPunkt, prevPunktIndex);
+      return korrigierterRueckblick - currentPunkt.vorblick;
     }
     return null;
   }
